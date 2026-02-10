@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Login - OnCall Platform{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:center; align-items:center; min-height: 70vh;">
+    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:2.5rem; width:100%; max-width:420px;">
+        <div style="text-align:center; margin-bottom:2rem;">
+            <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔐</div>
+            <h1 style="font-size:1.5rem; font-weight:700; color:var(--accent);">OnCall Platform</h1>
+            <p style="color:var(--text-secondary); font-size:0.9rem; margin-top:0.3rem;">Incident Management System</p>
+        </div>
+
+        {% if error %}
+        <div style="background:rgba(255,71,87,0.15); border:1px solid var(--critical); border-radius:8px; padding:0.8rem; margin-bottom:1.5rem; text-align:center;">
+            <span style="color:var(--critical); font-size:0.9rem;">{{ error }}</span>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/login" autocomplete="on">
+            <div class="form-group">
+                <label for="username" style="font-weight:600;">Utilisateur</label>
+                <input type="text" id="username" name="username" placeholder="Nom d'utilisateur"
+                       required autofocus autocomplete="username"
+                       style="padding:0.7rem; font-size:1rem; margin-top:0.3rem;">
+            </div>
+            <div class="form-group">
+                <label for="password" style="font-weight:600;">Mot de passe</label>
+                <input type="password" id="password" name="password" placeholder="Mot de passe"
+                       required autocomplete="current-password"
+                       style="padding:0.7rem; font-size:1rem; margin-top:0.3rem;">
+            </div>
+            <button type="submit" class="btn btn-primary"
+                    style="width:100%; padding:0.8rem; font-size:1rem; margin-top:0.5rem; border-radius:8px;">
+                Se connecter
+            </button>
+        </form>
+
+        <div style="text-align:center; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border);">
+            <p style="color:var(--text-secondary); font-size:0.8rem;">
+                Acces reserve aux administrateurs autorises
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.env.local
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+*.db
+venv/
+.venv/
+node_modules/
+grafana_data/
+postgres_data/
+redis_data/
+prometheus_data/

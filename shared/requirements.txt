@@ -1,0 +1,8 @@
+# Shared module for all services
+grpcio==1.60.0
+grpcio-tools==1.60.0
+protobuf==4.25.2
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+redis[hiredis]==5.0.1

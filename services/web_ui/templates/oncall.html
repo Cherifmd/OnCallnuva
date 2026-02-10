@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}On-Call Schedules - OnCall Platform{% endblock %}
+{% block content %}
+<h1 class="section-title">📅 On-Call Schedules</h1>
+
+{% for service_name, entries in schedules.items() %}
+<div class="schedule-card">
+    <h3>🔧 {{ service_name }}</h3>
+    {% if entries %}
+    <table>
+        <thead>
+            <tr>
+                <th>Level</th>
+                <th>Responder</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Start</th>
+                <th>End</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries %}
+            <tr>
+                <td><span class="level-badge level-{{ entry.escalation_level }}">L{{ entry.escalation_level }}</span></td>
+                <td><strong>{{ entry.user_name }}</strong></td>
+                <td>{{ entry.phone or '-' }}</td>
+                <td>{{ entry.email or '-' }}</td>
+                <td>{{ entry.start_time[:16] if entry.start_time and entry.start_time|length > 16 else entry.start_time }}</td>
+                <td>{{ entry.end_time[:16] if entry.end_time and entry.end_time|length > 16 else entry.end_time }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text-secondary)">No schedule configured for this service.</p>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

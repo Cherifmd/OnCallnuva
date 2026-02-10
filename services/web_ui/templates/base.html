@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Incident Platform{% endblock %}</title>
+    <style>
+        :root {
+            --bg-primary: #0f1419;
+            --bg-secondary: #1a1f2e;
+            --bg-card: #242938;
+            --text-primary: #e6e8eb;
+            --text-secondary: #8b95a5;
+            --accent: #4f8ff7;
+            --critical: #ff4757;
+            --high: #ff6b35;
+            --medium: #ffa502;
+            --low: #2ed573;
+            --resolved: #7bed9f;
+            --ack: #70a1ff;
+            --border: #2d3548;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        nav {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        nav .logo {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-right: 2rem;
+            text-decoration: none;
+        }
+        nav .logo span { color: var(--text-primary); }
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        nav a:hover, nav a.active {
+            color: var(--text-primary);
+            background: var(--bg-card);
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-card .value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-top: 0.3rem;
+        }
+        .stat-card .value.critical { color: var(--critical); }
+        .stat-card .value.warning { color: var(--medium); }
+        .stat-card .value.good { color: var(--low); }
+        .stat-card .value.info { color: var(--accent); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        th {
+            background: var(--bg-secondary);
+            padding: 0.8rem 1rem;
+            text-align: left;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 0.8rem 1rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+        tr:hover { background: rgba(79, 143, 247, 0.05); }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-critical { background: rgba(255,71,87,0.2); color: var(--critical); }
+        .badge-high { background: rgba(255,107,53,0.2); color: var(--high); }
+        .badge-medium { background: rgba(255,165,2,0.2); color: var(--medium); }
+        .badge-low { background: rgba(46,213,115,0.2); color: var(--low); }
+        .badge-triggered { background: rgba(255,71,87,0.2); color: var(--critical); }
+        .badge-acknowledged { background: rgba(112,161,255,0.2); color: var(--ack); }
+        .badge-resolved { background: rgba(123,237,159,0.2); color: var(--resolved); }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { opacity: 0.85; }
+        .btn-warning { background: var(--medium); color: #1a1f2e; }
+        .btn-success { background: var(--low); color: #1a1f2e; }
+        .btn-danger { background: var(--critical); color: white; }
+
+        .section-title {
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .filters {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .filters a {
+            padding: 0.4rem 0.8rem;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        .filters a.active, .filters a:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .detail-item .label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .detail-item .value {
+            font-size: 1.1rem;
+            margin-top: 0.2rem;
+        }
+        input, textarea, select {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.5rem;
+            border-radius: 6px;
+            width: 100%;
+        }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.3rem; font-size: 0.85rem; color: var(--text-secondary); }
+        .actions { display: flex; gap: 0.5rem; margin: 1rem 0; }
+        .schedule-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .schedule-card h3 { color: var(--accent); margin-bottom: 0.8rem; }
+        .level-badge {
+            display: inline-block;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            font-weight: 700;
+            font-size: 0.8rem;
+        }
+        .level-0 { background: var(--low); color: #1a1f2e; }
+        .level-1 { background: var(--medium); color: #1a1f2e; }
+        .level-2 { background: var(--high); color: white; }
+        .level-3 { background: var(--critical); color: white; }
+
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .detail-grid { grid-template-columns: 1fr; }
+            nav { padding: 0 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="logo">🔔 <span>OnCall</span>Platform</a>
+        <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+        <a href="/incidents" class="{% if '/incidents' in request.url.path and request.url.path != '/' %}active{% endif %}">Incidents</a>
+        <a href="/oncall" class="{% if '/oncall' in request.url.path %}active{% endif %}">On-Call</a>
+        {% if user %}
+        <div style="margin-left:auto; display:flex; align-items:center; gap:0.8rem;">
+            <span style="color:var(--text-secondary); font-size:0.85rem;">
+                🔐 <strong style="color:var(--accent);">{{ user.sub }}</strong>
+                <span style="background:rgba(79,143,247,0.15); color:var(--accent); padding:0.15rem 0.5rem; border-radius:4px; font-size:0.75rem; margin-left:0.3rem;">{{ user.role }}</span>
+            </span>
+            <a href="/logout" style="color:var(--critical); font-size:0.85rem; padding:0.4rem 0.8rem; border:1px solid var(--critical); border-radius:6px;">Logout</a>
+        </div>
+        {% endif %}
+    </nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

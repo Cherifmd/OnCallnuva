@@ -1,0 +1,344 @@
+# ============================================================
+# PagerDuty-like Incident Platform - Docker Compose
+# ============================================================
+# All services run 100% locally. No cloud dependencies.
+# ============================================================
+
+x-common-env: &common-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: incidents_db
+  POSTGRES_USER: oncall_admin
+  POSTGRES_PASSWORD: s3cur3_p4ssw0rd_2026
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  # JWT Authentication
+  JWT_SECRET: "oncall-platform-jwt-secret-2026-hackathon"
+  JWT_EXPIRY_HOURS: "24"
+  ADMIN_USERNAME: "admin"
+  ADMIN_PASSWORD: "admin"
+  JWT_AUTH_API: "false"
+  # Bonus 1: Email config (SendGrid or SMTP/MailHog)
+  SENDGRID_API_KEY: "${SENDGRID_API_KEY:-}"
+  SMTP_HOST: mailhog
+  SMTP_PORT: "1025"
+  SMTP_ENABLED: "true"
+  # Bonus 6: Jaeger tracing
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4317"
+  OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-oncall-platform}"
+  # Bonus 5: Loki log aggregation
+  LOKI_URL: "http://loki:3100"
+  LOKI_ENABLED: "true"
+
+services:
+  # ======================== INFRASTRUCTURE ========================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: oncall-postgres
+    environment:
+      POSTGRES_DB: incidents_db
+      POSTGRES_USER: oncall_admin
+      POSTGRES_PASSWORD: s3cur3_p4ssw0rd_2026
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oncall_admin -d incidents_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - oncall-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: oncall-redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - oncall-network
+
+  # ======================== MICROSERVICES ========================
+
+  alert-ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_DIR: alert_ingestion
+    # container_name removed to allow scaling: docker compose up --scale alert-ingestion=3
+    environment:
+      <<: *common-env
+      ALERT_INGESTION_HTTP_PORT: "8001"
+      INCIDENT_MGMT_HOST: incident-management
+      INCIDENT_MGMT_GRPC_PORT: "50052"
+    deploy:
+      replicas: 1   # Bonus 7: Scale with --scale alert-ingestion=N
+    ports:
+      - "8001"   # Dynamic port mapping to allow scaling; access via Traefik :80
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.alerts.rule=PathPrefix(`/api/v1/alerts`)"
+      - "traefik.http.routers.alerts.entrypoints=web"
+      - "traefik.http.services.alerts.loadbalancer.server.port=8001"
+      - "traefik.http.routers.alerts.middlewares=rate-limit@file"
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  incident-management:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_DIR: incident_management
+    container_name: oncall-incident-management
+    environment:
+      <<: *common-env
+      INCIDENT_MGMT_HTTP_PORT: "8002"
+      INCIDENT_MGMT_GRPC_PORT: "50052"
+      ONCALL_HOST: oncall-service
+      ONCALL_GRPC_PORT: "50053"
+      CORRELATION_WINDOW_SECONDS: "300"
+      ESCALATION_TIMEOUT_SECONDS: "120"
+    ports:
+      - "8002:8002"
+      - "50052:50052"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.incidents.rule=PathPrefix(`/api/v1/incidents`) || PathPrefix(`/api/v1/stats`)"
+      - "traefik.http.routers.incidents.entrypoints=web"
+      - "traefik.http.services.incidents.loadbalancer.server.port=8002"
+      - "traefik.http.routers.incidents.middlewares=rate-limit@file"
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  oncall-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_DIR: oncall_service
+    container_name: oncall-oncall-service
+    environment:
+      <<: *common-env
+      ONCALL_HTTP_PORT: "8003"
+      ONCALL_GRPC_PORT: "50053"
+    ports:
+      - "8003:8003"
+      - "50053:50053"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.oncall.rule=PathPrefix(`/api/v1/oncall`) || PathPrefix(`/api/v1/schedules`)"
+      - "traefik.http.routers.oncall.entrypoints=web"
+      - "traefik.http.services.oncall.loadbalancer.server.port=8003"
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  web-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.webui
+    container_name: oncall-web-ui
+    environment:
+      <<: *common-env
+      WEB_UI_HTTP_PORT: "8080"
+      INCIDENT_API_URL: http://incident-management:8002
+      ONCALL_API_URL: http://oncall-service:8003
+      ALERT_API_URL: http://alert-ingestion:8001
+    ports:
+      - "8080:8080"
+    depends_on:
+      - incident-management
+      - oncall-service
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webui.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.webui.entrypoints=web"
+      - "traefik.http.routers.webui.priority=1"
+      - "traefik.http.services.webui.loadbalancer.server.port=8080"
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  metrics-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_DIR: metrics_exporter
+    container_name: oncall-metrics-exporter
+    environment:
+      <<: *common-env
+      METRICS_HTTP_PORT: "9090"
+    ports:
+      - "9090:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  # ======================== OBSERVABILITY ========================
+
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: oncall-prometheus
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9091:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.3.1
+    container_name: oncall-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  # ======================== API GATEWAY ========================
+
+  traefik:
+    image: traefik:v3.0
+    container_name: oncall-traefik
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--entrypoints.web.address=:80"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entryPoint=web"
+      - "--accesslog=true"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "8888:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/traefik/dynamic:/etc/traefik/dynamic:ro
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  # ======================== BONUS: LOG AGGREGATION (Loki + Promtail) ========================
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: oncall-loki
+    volumes:
+      - ./config/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: oncall-promtail
+    volumes:
+      - ./config/loki/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  # ======================== BONUS: DISTRIBUTED TRACING (Jaeger) ========================
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: oncall-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  # ======================== BONUS: EMAIL TESTING (MailHog) ========================
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: oncall-mailhog
+    ports:
+      - "1025:1025"     # SMTP
+      - "8025:8025"     # Web UI
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  loki_data:
+    driver: local
+
+networks:
+  oncall-network:
+    driver: bridge

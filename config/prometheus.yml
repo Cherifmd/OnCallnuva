@@ -1,0 +1,77 @@
+# ============================================================
+# Prometheus Configuration - Scrape all 5 services every 5s
+# ============================================================
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  scrape_timeout: 4s
+
+scrape_configs:
+  # ---- Service 1: Alert Ingestion ----
+  - job_name: 'alert-ingestion'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['alert-ingestion:8001']
+        labels:
+          service: 'alert-ingestion'
+
+  # ---- Service 2: Incident Management ----
+  - job_name: 'incident-management'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['incident-management:8002']
+        labels:
+          service: 'incident-management'
+
+  # ---- Service 3: On-Call Service ----
+  - job_name: 'oncall-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['oncall-service:8003']
+        labels:
+          service: 'oncall-service'
+
+  # ---- Service 4: Web UI ----
+  - job_name: 'web-ui'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['web-ui:8080']
+        labels:
+          service: 'web-ui'
+
+  # ---- Service 5: Metrics Exporter (Business Metrics) ----
+  - job_name: 'metrics-exporter'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['metrics-exporter:9090']
+        labels:
+          service: 'metrics-exporter'
+
+  # ---- Traefik (API Gateway) ----
+  - job_name: 'traefik'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['traefik:80']
+        labels:
+          service: 'traefik'
+
+  # ---- Prometheus self-monitoring ----
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ---- Bonus 5: Loki ----
+  - job_name: 'loki'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['loki:3100']
+        labels:
+          service: 'loki'
+
+  # ---- Bonus 6: Jaeger ----
+  - job_name: 'jaeger'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['jaeger:14269']
+        labels:
+          service: 'jaeger'

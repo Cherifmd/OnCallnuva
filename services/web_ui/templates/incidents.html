@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Incidents - OnCall Platform{% endblock %}
+{% block content %}
+<h1 class="section-title">🚨 Incidents ({{ total }})</h1>
+
+<div class="filters">
+    <a href="/incidents" class="{% if not filter_status and not filter_severity %}active{% endif %}">All</a>
+    <a href="/incidents?status=triggered" class="{% if filter_status == 'triggered' %}active{% endif %}">🔴 Triggered</a>
+    <a href="/incidents?status=acknowledged" class="{% if filter_status == 'acknowledged' %}active{% endif %}">🟡 Acknowledged</a>
+    <a href="/incidents?status=resolved" class="{% if filter_status == 'resolved' %}active{% endif %}">🟢 Resolved</a>
+    <span style="border-left:1px solid var(--border); margin:0 0.5rem"></span>
+    <a href="/incidents?severity=critical" class="{% if filter_severity == 'critical' %}active{% endif %}">Critical</a>
+    <a href="/incidents?severity=high" class="{% if filter_severity == 'high' %}active{% endif %}">High</a>
+    <a href="/incidents?severity=medium" class="{% if filter_severity == 'medium' %}active{% endif %}">Medium</a>
+    <a href="/incidents?severity=low" class="{% if filter_severity == 'low' %}active{% endif %}">Low</a>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Severity</th>
+            <th>Title</th>
+            <th>Service</th>
+            <th>Status</th>
+            <th>Assigned To</th>
+            <th>Escalation</th>
+            <th>Alerts</th>
+            <th>MTTA</th>
+            <th>MTTR</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for inc in incidents %}
+        <tr onclick="window.location='/incidents/{{ inc.id }}'" style="cursor:pointer">
+            <td><span class="badge badge-{{ inc.severity }}">{{ inc.severity }}</span></td>
+            <td>{{ inc.title[:60] }}</td>
+            <td>{{ inc.service_name }}</td>
+            <td><span class="badge badge-{{ inc.status }}">{{ inc.status }}</span></td>
+            <td>{{ inc.assigned_to or '-' }}</td>
+            <td>L{{ inc.escalation_level }}</td>
+            <td>{{ inc.alert_count }}</td>
+            <td>{{ "%.0f"|format(inc.mtta_seconds) }}s</td>
+            <td>{{ "%.0f"|format(inc.mttr_seconds) }}s</td>
+            <td>{{ inc.created_at[:19] if inc.created_at else '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" style="text-align:center; color:var(--text-secondary)">No incidents match the filters.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

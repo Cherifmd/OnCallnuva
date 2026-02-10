@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Incident {{ incident.get('id', '')[:8] }} - OnCall Platform{% endblock %}
+{% block content %}
+<h1 class="section-title">
+    <span class="badge badge-{{ incident.get('severity', 'low') }}">{{ incident.get('severity', 'unknown') }}</span>
+    {{ incident.get('title', 'Unknown Incident') }}
+</h1>
+
+<div class="detail-grid">
+    <div class="stat-card">
+        <div class="detail-item">
+            <div class="label">Status</div>
+            <div class="value"><span class="badge badge-{{ incident.get('status', '') }}">{{ incident.get('status', '-') }}</span></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="detail-item">
+            <div class="label">Service</div>
+            <div class="value">{{ incident.get('service_name', '-') }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="detail-item">
+            <div class="label">Assigned To</div>
+            <div class="value">{{ incident.get('assigned_to', 'Unassigned') }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="detail-item">
+            <div class="label">Escalation Level</div>
+            <div class="value">L{{ incident.get('escalation_level', 0) }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="detail-item">
+            <div class="label">MTTA</div>
+            <div class="value">{{ "%.1f"|format(incident.get('mtta_seconds', 0)) }}s</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="detail-item">
+            <div class="label">MTTR</div>
+            <div class="value">{{ "%.1f"|format(incident.get('mttr_seconds', 0)) }}s</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="detail-item">
+            <div class="label">Created At</div>
+            <div class="value">{{ incident.get('created_at', '-') }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="detail-item">
+            <div class="label">Alert Count</div>
+            <div class="value">{{ incident.get('alert_count', 0) }}</div>
+        </div>
+    </div>
+</div>
+
+{% if incident.get('description') %}
+<div class="stat-card" style="margin-bottom:1rem">
+    <div class="label">Description</div>
+    <p style="margin-top:0.5rem">{{ incident.get('description') }}</p>
+</div>
+{% endif %}
+
+{% if incident.get('resolution_note') %}
+<div class="stat-card" style="margin-bottom:1rem; border-color:var(--low)">
+    <div class="label">Resolution Note</div>
+    <p style="margin-top:0.5rem">{{ incident.get('resolution_note') }}</p>
+</div>
+{% endif %}
+
+<!-- Actions -->
+{% if incident.get('status') == 'triggered' %}
+<div class="actions">
+    <form method="post" action="/incidents/{{ incident.get('id') }}/acknowledge" style="display:inline">
+        <input type="hidden" name="user_id" value="web-user">
+        <button type="submit" class="btn btn-warning">✋ Acknowledge</button>
+    </form>
+    <form method="post" action="/incidents/{{ incident.get('id') }}/resolve" style="display:inline">
+        <input type="hidden" name="user_id" value="web-user">
+        <input type="hidden" name="resolution_note" value="Resolved via Web UI">
+        <button type="submit" class="btn btn-success">✅ Resolve</button>
+    </form>
+</div>
+{% elif incident.get('status') == 'acknowledged' %}
+<div class="actions">
+    <form method="post" action="/incidents/{{ incident.get('id') }}/resolve">
+        <div class="form-group">
+            <label>Resolution Note</label>
+            <textarea name="resolution_note" rows="3" placeholder="Describe the resolution..."></textarea>
+        </div>
+        <input type="hidden" name="user_id" value="web-user">
+        <button type="submit" class="btn btn-success">✅ Resolve</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Related Alerts -->
+{% if incident.get('alerts') %}
+<h2 class="section-title" style="margin-top:2rem">📋 Related Alerts ({{ incident.get('alerts', [])|length }})</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Alert ID</th>
+            <th>Source</th>
+            <th>Title</th>
+            <th>Severity</th>
+            <th>Timestamp</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for alert in incident.get('alerts', []) %}
+        <tr>
+            <td style="font-family:monospace; font-size:0.8rem">{{ alert.id[:12] }}...</td>
+            <td>{{ alert.source }}</td>
+            <td>{{ alert.title }}</td>
+            <td><span class="badge badge-{{ alert.severity }}">{{ alert.severity }}</span></td>
+            <td>{{ alert.timestamp[:19] if alert.timestamp else '-' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<div style="margin-top:1rem">
+    <a href="/incidents" class="btn btn-primary">← Back to Incidents</a>
+</div>
+{% endblock %}

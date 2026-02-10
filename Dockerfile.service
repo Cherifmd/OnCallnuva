@@ -1,0 +1,63 @@
+# ============================================================
+# Multi-stage Dockerfile for Python gRPC microservices
+# Target: < 500MB image size using Python 3.11-alpine
+# ============================================================
+
+# ---- Stage 1: Protobuf compiler ----
+FROM python:3.11-alpine AS proto-builder
+
+RUN apk add --no-cache gcc musl-dev linux-headers
+RUN pip install --no-cache-dir grpcio-tools==1.60.0 protobuf==4.25.2
+
+WORKDIR /build
+COPY proto/ /build/proto/
+
+# Generate Python gRPC stubs
+RUN mkdir -p /build/generated && \
+    python -m grpc_tools.protoc \
+    -I/build/proto \
+    --python_out=/build/generated \
+    --grpc_python_out=/build/generated \
+    /build/proto/incidents.proto
+
+# Fix imports in generated code
+RUN sed -i 's/import incidents_pb2/from . import incidents_pb2/' /build/generated/incidents_pb2_grpc.py
+RUN touch /build/generated/__init__.py
+
+# ---- Stage 2: Dependencies builder ----
+FROM python:3.11-alpine AS deps-builder
+
+RUN apk add --no-cache gcc musl-dev postgresql-dev linux-headers libffi-dev
+
+ARG SERVICE_DIR
+COPY services/${SERVICE_DIR}/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r /tmp/requirements.txt
+
+# ---- Stage 3: Final runtime ----
+FROM python:3.11-alpine AS runtime
+
+# Minimal runtime dependencies
+RUN apk add --no-cache libpq libstdc++ ca-certificates && \
+    adduser -D -u 1000 appuser
+
+# Copy installed Python packages
+COPY --from=deps-builder /install /usr/local
+
+# Copy generated protobuf stubs
+COPY --from=proto-builder /build/generated /app/generated
+
+# Copy shared module
+COPY shared/ /app/shared/
+
+# Copy service code
+ARG SERVICE_DIR
+COPY services/${SERVICE_DIR}/ /app/
+
+WORKDIR /app
+USER appuser
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
+
+CMD ["python", "main.py"]

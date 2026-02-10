@@ -1,0 +1,28 @@
+# ============================================================
+# Traefik Dynamic Configuration - Rate Limiting Middleware
+# ============================================================
+http:
+  middlewares:
+    rate-limit:
+      rateLimit:
+        average: 100     # 100 requests per second average
+        burst: 50        # Allow bursts up to 50
+        period: "1s"
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # Security headers
+    security-headers:
+      headers:
+        frameDeny: true
+        sslRedirect: false
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsSeconds: 315360000
+        stsIncludeSubdomains: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        customResponseHeaders:
+          X-Powered-By: ""
+          Server: ""

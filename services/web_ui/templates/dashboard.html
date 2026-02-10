@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - OnCall Platform{% endblock %}
+{% block content %}
+<h1 class="section-title">📊 Dashboard</h1>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="label">Total Incidents</div>
+        <div class="value info">{{ stats.get('total_incidents', 0) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Open (Triggered)</div>
+        <div class="value critical">{{ stats.get('open_incidents', 0) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Acknowledged</div>
+        <div class="value warning">{{ stats.get('acknowledged_incidents', 0) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Resolved</div>
+        <div class="value good">{{ stats.get('resolved_incidents', 0) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Avg MTTA</div>
+        <div class="value info">{{ "%.1f"|format(stats.get('avg_mtta_seconds', 0)) }}s</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Avg MTTR</div>
+        <div class="value info">{{ "%.1f"|format(stats.get('avg_mttr_seconds', 0)) }}s</div>
+    </div>
+</div>
+
+<h2 class="section-title">🔥 Recent Incidents</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Severity</th>
+            <th>Title</th>
+            <th>Service</th>
+            <th>Status</th>
+            <th>Assigned To</th>
+            <th>Alerts</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for inc in incidents %}
+        <tr onclick="window.location='/incidents/{{ inc.id }}'" style="cursor:pointer">
+            <td><span class="badge badge-{{ inc.severity }}">{{ inc.severity }}</span></td>
+            <td>{{ inc.title }}</td>
+            <td>{{ inc.service_name }}</td>
+            <td><span class="badge badge-{{ inc.status }}">{{ inc.status }}</span></td>
+            <td>{{ inc.assigned_to or '-' }}</td>
+            <td>{{ inc.alert_count }}</td>
+            <td>{{ inc.created_at[:19] if inc.created_at else '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center; color:var(--text-secondary)">No incidents yet. System is healthy! ✅</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh every 15 seconds
+setTimeout(() => location.reload(), 15000);
+</script>
+{% endblock %}

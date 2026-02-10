@@ -1,0 +1,199 @@
+syntax = "proto3";
+
+package incidents;
+
+// ============================================================
+// Alert Ingestion -> Incident Management
+// ============================================================
+
+service AlertService {
+  // Envoie une alerte brute au service de gestion d'incidents
+  rpc IngestAlert (AlertRequest) returns (AlertResponse);
+  // Envoi batch d'alertes
+  rpc IngestAlertBatch (AlertBatchRequest) returns (AlertBatchResponse);
+}
+
+service IncidentService {
+  // Récupérer un incident par ID
+  rpc GetIncident (IncidentQuery) returns (IncidentDetail);
+  // Lister les incidents avec filtres
+  rpc ListIncidents (IncidentFilter) returns (IncidentList);
+  // Acquitter un incident
+  rpc AcknowledgeIncident (AckRequest) returns (AckResponse);
+  // Résoudre un incident
+  rpc ResolveIncident (ResolveRequest) returns (ResolveResponse);
+}
+
+service OnCallService {
+  // Obtenir l'astreinte courante pour un service
+  rpc GetCurrentOnCall (OnCallQuery) returns (OnCallResponse);
+  // Déclencher une escalade
+  rpc TriggerEscalation (EscalationRequest) returns (EscalationResponse);
+  // Gérer le calendrier d'astreinte
+  rpc SetSchedule (ScheduleRequest) returns (ScheduleResponse);
+  rpc GetSchedule (ScheduleQuery) returns (ScheduleDetail);
+}
+
+service MetricsService {
+  // Récupérer les métriques business
+  rpc GetBusinessMetrics (MetricsQuery) returns (BusinessMetrics);
+}
+
+// ======================== MESSAGES ========================
+
+// --- Alert Messages ---
+message AlertRequest {
+  string source = 1;            // ex: "prometheus", "grafana", "custom"
+  string service_name = 2;      // ex: "api-gateway", "payment-service"
+  string severity = 3;          // "critical", "high", "medium", "low"
+  string title = 4;
+  string description = 5;
+  map<string, string> labels = 6;
+  int64 timestamp = 7;          // Unix timestamp
+}
+
+message AlertResponse {
+  string alert_id = 1;
+  string status = 2;            // "accepted", "rejected", "duplicate"
+  string incident_id = 3;       // ID de l'incident corrélé (si applicable)
+}
+
+message AlertBatchRequest {
+  repeated AlertRequest alerts = 1;
+}
+
+message AlertBatchResponse {
+  repeated AlertResponse responses = 1;
+  int32 accepted_count = 2;
+  int32 rejected_count = 3;
+}
+
+// --- Incident Messages ---
+message IncidentQuery {
+  string incident_id = 1;
+}
+
+message IncidentFilter {
+  string status = 1;           // "triggered", "acknowledged", "resolved"
+  string severity = 2;
+  string service_name = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message IncidentDetail {
+  string incident_id = 1;
+  string title = 2;
+  string description = 3;
+  string severity = 4;
+  string status = 5;
+  string service_name = 6;
+  int64 created_at = 7;
+  int64 acknowledged_at = 8;
+  int64 resolved_at = 9;
+  repeated string alert_ids = 10;
+  string assigned_to = 11;
+  int32 escalation_level = 12;
+  double mtta_seconds = 13;     // Mean Time To Acknowledge
+  double mttr_seconds = 14;     // Mean Time To Resolve
+}
+
+message IncidentList {
+  repeated IncidentDetail incidents = 1;
+  int32 total_count = 2;
+}
+
+message AckRequest {
+  string incident_id = 1;
+  string user_id = 2;
+}
+
+message AckResponse {
+  bool success = 1;
+  string message = 2;
+  double mtta_seconds = 3;
+}
+
+message ResolveRequest {
+  string incident_id = 1;
+  string user_id = 2;
+  string resolution_note = 3;
+}
+
+message ResolveResponse {
+  bool success = 1;
+  string message = 2;
+  double mttr_seconds = 3;
+}
+
+// --- On-Call Messages ---
+message OnCallQuery {
+  string service_name = 1;
+}
+
+message OnCallResponse {
+  string user_id = 1;
+  string user_name = 2;
+  string phone = 3;
+  string email = 4;
+  int32 escalation_level = 5;
+}
+
+message EscalationRequest {
+  string incident_id = 1;
+  string service_name = 2;
+  int32 current_level = 3;
+}
+
+message EscalationResponse {
+  bool success = 1;
+  string next_user_id = 2;
+  string next_user_name = 3;
+  int32 new_level = 4;
+}
+
+message ScheduleRequest {
+  string service_name = 1;
+  repeated ScheduleEntry entries = 2;
+}
+
+message ScheduleEntry {
+  string user_id = 1;
+  string user_name = 2;
+  int32 escalation_level = 3;
+  int64 start_time = 4;
+  int64 end_time = 5;
+  string phone = 6;
+  string email = 7;
+}
+
+message ScheduleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ScheduleQuery {
+  string service_name = 1;
+}
+
+message ScheduleDetail {
+  string service_name = 1;
+  repeated ScheduleEntry entries = 2;
+}
+
+// --- Metrics Messages ---
+message MetricsQuery {
+  int64 from_timestamp = 1;
+  int64 to_timestamp = 2;
+}
+
+message BusinessMetrics {
+  int32 total_incidents = 1;
+  int32 open_incidents = 2;
+  int32 acknowledged_incidents = 3;
+  int32 resolved_incidents = 4;
+  double avg_mtta_seconds = 5;
+  double avg_mttr_seconds = 6;
+  map<string, int32> incidents_by_severity = 7;
+  map<string, int32> incidents_by_service = 8;
+}
