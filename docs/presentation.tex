@@ -1,0 +1,1207 @@
+% =============================================================================
+% OnCallNova — Plateforme de Gestion d'Incidents (Type PagerDuty) 100% Locale
+% Hackathon OpCell — Document d'Architecture & Justifications Techniques
+% =============================================================================
+\documentclass[a4paper,11pt]{article}
+
+% ---------- Packages ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\geometry{margin=2cm}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{
+  shapes.geometric, arrows.meta, positioning, fit,
+  backgrounds, calc, decorations.markings, shadows,
+  matrix, patterns, chains, scopes
+}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{fontawesome5}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\usepackage{multicol}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{amssymb}
+\usepackage{pifont}
+
+% ---------- Couleurs ----------
+\definecolor{primary}{HTML}{1E88E5}
+\definecolor{secondary}{HTML}{43A047}
+\definecolor{accent}{HTML}{FB8C00}
+\definecolor{danger}{HTML}{E53935}
+\definecolor{dark}{HTML}{212121}
+\definecolor{light}{HTML}{F5F5F5}
+\definecolor{grpcblue}{HTML}{244C5A}
+\definecolor{redisbg}{HTML}{D32F2F}
+\definecolor{postgresbg}{HTML}{336791}
+\definecolor{traefikbg}{HTML}{00BCD4}
+\definecolor{prometheusbg}{HTML}{E6522C}
+\definecolor{grafanabg}{HTML}{F46800}
+\definecolor{jaegerbg}{HTML}{66CFE3}
+\definecolor{lokibg}{HTML}{F9A825}
+\definecolor{codebg}{HTML}{282C34}
+
+% ---------- Style listings ----------
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  commentstyle=\color{secondary},
+  keywordstyle=\color{primary}\bfseries,
+  stringstyle=\color{accent},
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{dark!30},
+  numbers=left,
+  numberstyle=\tiny\color{dark!40},
+  xleftmargin=1.5em
+}
+
+% ---------- Style tcolorbox ----------
+\newtcolorbox{techbox}[1]{
+  colback=primary!5, colframe=primary!80,
+  title={\faIcon{microchip}~#1}, fonttitle=\bfseries,
+  breakable, enhanced, shadow={2mm}{-1mm}{0mm}{black!20}
+}
+\newtcolorbox{bonusbox}[1]{
+  colback=accent!5, colframe=accent!80,
+  title={\faIcon{star}~#1}, fonttitle=\bfseries,
+  breakable, enhanced, shadow={2mm}{-1mm}{0mm}{black!20}
+}
+\newtcolorbox{justifbox}[1]{
+  colback=secondary!5, colframe=secondary!80,
+  title={\faIcon{check-circle}~#1}, fonttitle=\bfseries,
+  breakable, enhanced
+}
+\newtcolorbox{warnbox}[1]{
+  colback=danger!5, colframe=danger!80,
+  title={\faIcon{shield-alt}~#1}, fonttitle=\bfseries,
+  breakable, enhanced
+}
+
+% ---------- En-tête / Pied de page ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textcolor{primary}{\textbf{OnCallNova}}}
+\fancyhead[R]{\textcolor{dark!60}{Hackathon OpCell}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{1pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{primary}\leaders\hrule height \headrulewidth\hfill}}
+
+% ---------- Commandes utiles ----------
+\newcommand{\cmark}{\textcolor{secondary}{\ding{51}}}
+\newcommand{\xmark}{\textcolor{danger}{\ding{55}}}
+\newcommand{\tech}[1]{\texttt{\textcolor{primary}{#1}}}
+
+% =============================================================================
+\begin{document}
+
+% ===================== PAGE DE TITRE =====================
+\begin{titlepage}
+\begin{center}
+\vspace*{2cm}
+
+\begin{tikzpicture}
+  \node[circle, fill=primary, minimum size=3cm, text=white, font=\Huge\bfseries] {ON};
+  \node[below=0.1cm, font=\Huge\bfseries\color{dark}] at (0,-1.7) {OnCallNova};
+\end{tikzpicture}
+
+\vspace{1cm}
+{\LARGE\color{dark}\textbf{Plateforme de Gestion d'Incidents}}\\[0.3cm]
+{\Large\color{primary} Type PagerDuty — 100\% Locale}\\[1.5cm]
+
+\begin{tikzpicture}
+  \foreach \i/\icon/\lbl in {
+    0/server/5 Microservices,
+    1/network-wired/gRPC \& REST,
+    2/database/PostgreSQL + Redis,
+    3/shield-alt/JWT Auth,
+    4/chart-line/Observabilité
+  }{
+    \node[draw=primary!60, rounded corners=8pt, fill=primary!8,
+          minimum width=2.8cm, minimum height=1.2cm, align=center,
+          font=\small] at (\i*3.2,0)
+      {\faIcon{\icon}\\[2pt]\lbl};
+  }
+\end{tikzpicture}
+
+\vspace{2cm}
+{\large\color{dark!70} Hackathon OpCell — Document d'Architecture}\\[0.5cm]
+{\color{dark!50} \today}
+
+\vfill
+\end{center}
+\end{titlepage}
+
+% ===================== TABLE DES MATIÈRES =====================
+\tableofcontents
+\newpage
+
+% =============================================================================
+% SECTION 1 : VUE D'ENSEMBLE
+% =============================================================================
+\section{Vue d'Ensemble du Projet}
+
+\begin{techbox}{Résumé Exécutif}
+\textbf{OnCallNova} est une plateforme de gestion d'incidents de production déployable
+\textbf{100\% en local} via Docker Compose. Elle reproduit les fonctionnalités
+essentielles d'un outil comme PagerDuty~: ingestion d'alertes, corrélation
+intelligente, gestion du cycle de vie des incidents, planification d'astreintes
+et tableau de bord temps réel — le tout orchestré par \textbf{5 microservices}
+communiquant en \textbf{gRPC} et exposés derrière un API Gateway \textbf{Traefik}.
+\end{techbox}
+
+\subsection{Objectifs Fonctionnels}
+
+\begin{enumerate}[label=\textbf{\arabic*.}, leftmargin=2em]
+  \item \textbf{Ingestion \& Corrélation} — Recevoir des alertes multi-sources et
+        les regrouper en incidents via un algorithme de fenêtre temporelle.
+  \item \textbf{Gestion du Cycle de Vie} — Créer, acquitter, résoudre, escalader
+        les incidents avec traçabilité complète.
+  \item \textbf{Planification d'Astreintes} — Définir des équipes, des rotations et
+        identifier l'ingénieur de garde en temps réel.
+  \item \textbf{Observabilité} — Métriques Prometheus, dashboards Grafana, tracing
+        distribué Jaeger.
+  \item \textbf{Sécurité} — Authentification JWT, rate limiting Traefik, chiffrement
+        des secrets.
+\end{enumerate}
+
+% =============================================================================
+% SECTION 2 : ARCHITECTURE GLOBALE
+% =============================================================================
+\section{Architecture Globale}
+
+\subsection{Diagramme de Topologie des Services}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1.2cm and 2.5cm,
+  every node/.style={font=\small},
+  service/.style={
+    rectangle, rounded corners=6pt, draw=#1!80, fill=#1!12,
+    minimum width=3.2cm, minimum height=1.4cm, align=center,
+    font=\small\bfseries, drop shadow={shadow xshift=1pt, shadow yshift=-1pt}
+  },
+  infra/.style={
+    rectangle, rounded corners=4pt, draw=#1!80, fill=#1!15,
+    minimum width=2.8cm, minimum height=1cm, align=center,
+    font=\footnotesize\bfseries
+  },
+  arrow/.style={-{Stealth[length=6pt]}, thick, #1},
+  biarrow/.style={{Stealth[length=6pt]}-{Stealth[length=6pt]}, thick, #1},
+  label/.style={font=\scriptsize\color{dark!60}, midway, above, sloped}
+]
+
+% --- Couche Client ---
+\node[service=dark] (client) {\faIcon{desktop}\\Client / Navigateur};
+
+% --- API Gateway ---
+\node[service=traefikbg, below=1.5cm of client] (traefik)
+  {\faIcon{project-diagram}\\Traefik v3\\{\scriptsize Port 80 | Rate Limit}};
+
+% --- Microservices ---
+\node[service=primary, below left=2cm and 3cm of traefik] (alert)
+  {\faIcon{bell}\\Alert Ingestion\\{\scriptsize :8001 | :50051}};
+\node[service=danger, below=2cm of traefik] (incident)
+  {\faIcon{fire}\\Incident Mgmt\\{\scriptsize :8002 | :50052}};
+\node[service=secondary, below right=2cm and 3cm of traefik] (oncall)
+  {\faIcon{user-clock}\\OnCall Service\\{\scriptsize :8003 | :50053}};
+
+\node[service=accent, left=1.5cm of alert] (webui)
+  {\faIcon{window-maximize}\\Web UI\\{\scriptsize :8080}};
+\node[service=prometheusbg, right=1.5cm of oncall] (metrics)
+  {\faIcon{tachometer-alt}\\Metrics Exporter\\{\scriptsize :9090}};
+
+% --- Flèches Client → Traefik → Services ---
+\draw[arrow=dark] (client) -- (traefik);
+\draw[arrow=traefikbg] (traefik) -- node[label] {REST} (alert);
+\draw[arrow=traefikbg] (traefik) -- node[label] {REST} (incident);
+\draw[arrow=traefikbg] (traefik) -- node[label] {REST} (oncall);
+\draw[arrow=traefikbg] (traefik) -| node[label, near start] {REST} (webui);
+\draw[arrow=traefikbg] (traefik) -| node[label, near start] {REST} (metrics);
+
+% --- Inter-service gRPC ---
+\draw[biarrow=grpcblue, dashed] (alert) -- node[label] {gRPC} (incident);
+\draw[biarrow=grpcblue, dashed] (incident) -- node[label] {gRPC} (oncall);
+
+% --- Couche Data ---
+\node[infra=postgresbg, below=3.5cm of alert] (pg)
+  {\faIcon{database}~PostgreSQL 16};
+\node[infra=redisbg, below=3.5cm of oncall] (redis)
+  {\faIcon{bolt}~Redis 7};
+
+\draw[arrow=postgresbg] (alert) -- (pg);
+\draw[arrow=postgresbg] (incident) -- (pg);
+\draw[arrow=postgresbg] (oncall) -- (pg);
+\draw[arrow=redisbg] (alert) -- (redis);
+\draw[arrow=redisbg] (incident) -- (redis);
+\draw[arrow=redisbg] (oncall) -- (redis);
+
+% --- Couche Observabilité ---
+\node[infra=prometheusbg, below=3.5cm of incident] (prom)
+  {\faIcon{chart-bar}~Prometheus};
+\node[infra=grafanabg, right=0.8cm of prom] (grafana)
+  {\faIcon{chart-area}~Grafana};
+\node[infra=jaegerbg, left=0.8cm of prom] (jaeger)
+  {\faIcon{search}~Jaeger};
+
+\draw[arrow=prometheusbg, dotted] (prom) -- (grafana);
+\draw[arrow=prometheusbg, dotted] (metrics) |- (prom);
+\draw[arrow=jaegerbg, dotted] (alert.south) -- ++(0,-0.8) -| (jaeger);
+\draw[arrow=jaegerbg, dotted] (incident.south) -- ++(0,-0.5) -| (jaeger);
+
+% --- Légende ---
+\node[below=6.5cm of traefik, font=\footnotesize] {
+  \tikz\draw[arrow=traefikbg] (0,0) -- (1,0); HTTP/REST \quad
+  \tikz\draw[biarrow=grpcblue, dashed] (0,0) -- (1,0); gRPC \quad
+  \tikz\draw[arrow=prometheusbg, dotted] (0,0) -- (1,0); Métriques/Traces
+};
+
+\end{tikzpicture}
+\caption{Topologie complète des 14 conteneurs Docker de la plateforme OnCallNova}
+\label{fig:topology}
+\end{figure}
+
+% ---------- Tableau récap des services ----------
+\subsection{Inventaire des 14 Conteneurs}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\textbf{Service} & \textbf{Techno} & \textbf{Port(s)} & \textbf{Rôle} \\
+\midrule
+Alert Ingestion    & Python/FastAPI   & dyn / 50051  & Réception alertes, corrélation, gRPC→Incident \\
+Incident Mgmt      & Python/FastAPI   & 8002 / 50052 & CRUD incidents, webhooks, analytics \\
+OnCall Service     & Python/FastAPI   & 8003 / 50053 & Astreintes, rotations, escalade \\
+Web UI             & Python/FastAPI   & 8080         & Dashboard temps réel, login JWT \\
+Metrics Exporter   & Python/FastAPI   & 9090         & Agrégation métriques custom \\
+\midrule
+PostgreSQL 16      & PostgreSQL       & 5432         & Base de données relationnelle \\
+Redis 7            & Redis            & 6379         & Cache, Pub/Sub, sessions \\
+\midrule
+Traefik v3         & Go               & 80 / 8888    & API Gateway, routage, rate limiting \\
+Prometheus         & Go               & 9091         & Collecte métriques (scrape 5s) \\
+Grafana 10.3       & Go               & 3000         & Visualisation dashboards \\
+Jaeger             & Go               & 16686 / 4317 & Tracing distribué (OTLP) \\
+Loki 3.0           & Go               & 3100         & Agrégation logs \\
+Promtail           & Go               & —            & Collecte logs → Loki \\
+MailHog            & Go               & 8025 / 1025  & Serveur SMTP de test local \\
+\bottomrule
+\end{tabularx}
+\caption{Détail des 14 services Docker Compose}
+\end{table}
+
+% =============================================================================
+% SECTION 3 : ARCHITECTURE DÉTAILLÉE PAR COUCHE
+% =============================================================================
+\section{Architecture Détaillée par Couche}
+
+\subsection{Couche 1 — API Gateway (Traefik v3)}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.8cm,
+  box/.style={rectangle, rounded corners=4pt, draw=traefikbg!80,
+              fill=traefikbg!10, minimum width=5cm, minimum height=0.8cm,
+              font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, traefikbg!80}
+]
+  \node[box, fill=dark!10, draw=dark!50] (req) {Requête HTTP entrante (:80)};
+  \node[box, below=of req] (tls) {Entrypoint Web};
+  \node[box, below=of tls] (rate) {Middleware: Rate Limiting (100 req/s)};
+  \node[box, below=of rate] (strip) {Middleware: StripPrefix};
+  \node[box, below=of strip] (route) {Router: PathPrefix Matching};
+
+  \node[box, fill=primary!10, draw=primary!60, below left=1cm and -0.3cm of route]
+    (s1) {/api/v1/alerts → Alert Ingestion};
+  \node[box, fill=danger!10, draw=danger!60, below=1cm of route]
+    (s2) {/api/v1/incidents → Incident Mgmt};
+  \node[box, fill=secondary!10, draw=secondary!60, below right=1cm and -0.3cm of route]
+    (s3) {/api/v1/oncall → OnCall Service};
+
+  \draw[arrow] (req) -- (tls);
+  \draw[arrow] (tls) -- (rate);
+  \draw[arrow] (rate) -- (strip);
+  \draw[arrow] (strip) -- (route);
+  \draw[arrow] (route) -| (s1);
+  \draw[arrow] (route) -- (s2);
+  \draw[arrow] (route) -| (s3);
+\end{tikzpicture}
+\caption{Pipeline de traitement Traefik — du client au microservice}
+\label{fig:traefik}
+\end{figure}
+
+\begin{justifbox}{Justification : Traefik v3}
+\begin{itemize}[nosep]
+  \item \textbf{Découverte automatique} via labels Docker — zéro configuration de routes manuelles.
+  \item \textbf{Rate limiting natif} (100 req/s par IP) sans code applicatif.
+  \item \textbf{Dashboard intégré} (:8888) pour visualiser les routes en temps réel.
+  \item \textbf{Support scaling} : découvre automatiquement les nouvelles instances
+        lors d'un \tech{docker compose up --scale alert-ingestion=3}.
+  \item \textbf{Alternatives rejetées} : Nginx (configuration statique, pas de découverte Docker),
+        Kong (trop lourd pour un déploiement 100\% local).
+\end{itemize}
+\end{justifbox}
+
+% ---------- Couche 2 : Microservices ----------
+\subsection{Couche 2 — Les 5 Microservices}
+
+\subsubsection{Alert Ingestion Service}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.6cm and 1.5cm,
+  process/.style={rectangle, rounded corners=4pt, draw=primary!70,
+                  fill=primary!8, minimum width=3.5cm, minimum height=0.9cm,
+                  font=\small, align=center},
+  data/.style={cylinder, draw=postgresbg!70, fill=postgresbg!8,
+               minimum width=1.8cm, minimum height=0.8cm, font=\small,
+               shape border rotate=90, aspect=0.3},
+  arrow/.style={-{Stealth[length=5pt]}, thick}
+]
+  \node[process] (recv) {\faIcon{inbox}~Réception Alerte\\POST /api/v1/alerts};
+  \node[process, below=of recv] (valid) {\faIcon{check}~Validation Pydantic\\source, severity, message};
+  \node[process, below=of valid] (dedup) {\faIcon{clone}~Déduplication\\Redis fingerprint (SHA-256)};
+  \node[process, below=of dedup] (corr) {\faIcon{project-diagram}~Corrélation\\Fenêtre 5 min + source};
+  \node[process, below left=1cm and 0cm of corr] (create) {\faIcon{plus-circle}~Nouveau Incident\\gRPC → Incident Mgmt};
+  \node[process, below right=1cm and 0cm of corr] (attach) {\faIcon{paperclip}~Rattachement\\Incident existant};
+
+  \draw[arrow] (recv) -- (valid);
+  \draw[arrow] (valid) -- (dedup);
+  \draw[arrow] (dedup) -- (corr);
+  \draw[arrow] (corr) -- node[left, font=\scriptsize] {Pas de match} (create);
+  \draw[arrow] (corr) -- node[right, font=\scriptsize] {Match trouvé} (attach);
+
+  % Annotation algorithme
+  \node[right=2.5cm of corr, text width=4.5cm, font=\scriptsize, align=left,
+        draw=primary!40, fill=primary!5, rounded corners=3pt, inner sep=6pt]
+    (algo) {
+      \textbf{Algorithme de corrélation:}\\[3pt]
+      1. Hash = SHA-256(source + severity)\\
+      2. Recherche dans Redis: clé = \texttt{corr:\{hash\}}\\
+      3. Si trouvé et $\Delta t < 300$s → rattacher\\
+      4. Sinon → créer incident + stocker clé Redis avec TTL=300s
+    };
+  \draw[dashed, primary!40] (corr) -- (algo);
+\end{tikzpicture}
+\caption{Pipeline de traitement du service Alert Ingestion}
+\label{fig:alert-pipeline}
+\end{figure}
+
+\begin{justifbox}{Justification : Corrélation par fenêtre temporelle}
+\begin{itemize}[nosep]
+  \item Réduit le \textbf{bruit d'alertes} : 100 alertes similaires en 5 minutes
+        = 1 seul incident.
+  \item \textbf{Redis comme cache de corrélation} : TTL natif pour l'expiration
+        automatique de la fenêtre — $O(1)$ en lecture/écriture.
+  \item \textbf{SHA-256 fingerprint} : collision quasi-nulle, déduplication fiable.
+  \item Fenêtre de 5 minutes configurable via variable d'environnement
+        \tech{CORRELATION\_WINDOW}.
+\end{itemize}
+\end{justifbox}
+
+\subsubsection{Incident Management Service}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  state/.style={circle, draw=#1!80, fill=#1!15, minimum size=1.6cm,
+                font=\small\bfseries, text=#1!80},
+  arrow/.style={-{Stealth[length=6pt]}, thick, dark!60},
+  label/.style={font=\scriptsize, midway, above, sloped}
+]
+  \node[state=danger] (firing) {FIRING};
+  \node[state=accent, right=3cm of firing] (ack) {ACK};
+  \node[state=secondary, right=3cm of ack] (resolved) {RESOLVED};
+  \node[state=primary, below=2cm of ack] (escalated) {ESCALATED};
+
+  \draw[arrow] (firing) -- node[label] {acknowledge()} (ack);
+  \draw[arrow] (ack) -- node[label] {resolve()} (resolved);
+  \draw[arrow] (firing) -- node[label, below, sloped] {timeout 30 min} (escalated);
+  \draw[arrow] (escalated) -- node[label] {acknowledge()} (ack);
+  \draw[arrow, bend right=20] (escalated.east) -- node[label, below] {resolve()} (resolved.south);
+
+  % Annotations
+  \node[below=0.3cm of firing, font=\scriptsize\color{dark!50}] {Création};
+  \node[below=0.3cm of ack, font=\scriptsize\color{dark!50}] {Prise en charge};
+  \node[below=0.3cm of resolved, font=\scriptsize\color{dark!50}] {Clôture};
+  \node[below=0.3cm of escalated, font=\scriptsize\color{dark!50}] {Niveau supérieur};
+\end{tikzpicture}
+\caption{Machine à états du cycle de vie d'un incident}
+\label{fig:incident-states}
+\end{figure}
+
+\begin{techbox}{Fonctionnalités clés — Incident Management}
+\begin{multicols}{2}
+\begin{itemize}[nosep]
+  \item CRUD complet (REST + gRPC)
+  \item Machine à états FIRING → ACK → RESOLVED
+  \item Escalade automatique (timeout 30 min)
+  \item Historique complet (timeline)
+  \item Calcul MTTA / MTTR automatique
+  \item Notifications email (MailHog)
+  \item Dispatch webhooks (HMAC-SHA256)
+  \item Analytics (trends \& MTTR distribution)
+  \item Protection JWT sur endpoints d'écriture
+  \item Métriques Prometheus exposées
+\end{itemize}
+\end{multicols}
+\end{techbox}
+
+\subsubsection{OnCall Service}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.7cm,
+  box/.style={rectangle, rounded corners=4pt, draw=secondary!70,
+              fill=secondary!8, minimum width=4.5cm, minimum height=0.8cm,
+              font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, secondary!60}
+]
+  \node[box] (teams) {\faIcon{users}~Gestion des Équipes\\CRUD /api/v1/teams};
+  \node[box, below=of teams] (sched) {\faIcon{calendar-alt}~Planification Rotations\\schedules avec start/end};
+  \node[box, below=of sched] (oncall) {\faIcon{user-shield}~Identification On-Call\\GET /api/v1/oncall/current};
+  \node[box, below=of oncall] (esc) {\faIcon{level-up-alt}~Escalade Niveau N\\gRPC GetCurrentOnCall};
+
+  \draw[arrow] (teams) -- (sched);
+  \draw[arrow] (sched) -- (oncall);
+  \draw[arrow] (oncall) -- (esc);
+
+  \node[right=2cm of sched, text width=4cm, font=\scriptsize,
+        draw=secondary!40, fill=secondary!5, rounded corners=3pt, inner sep=6pt]
+    (rot) {
+      \textbf{Algorithme de rotation:}\\[3pt]
+      \texttt{now = datetime.utcnow()}\\
+      \texttt{rotation = schedules}\\
+      \texttt{~~.filter(start <= now)}\\
+      \texttt{~~.filter(end > now)}\\
+      \texttt{~~.order\_by(level)}\\
+      \texttt{~~.first()}
+    };
+  \draw[dashed, secondary!40] (sched) -- (rot);
+\end{tikzpicture}
+\caption{Fonctionnement du service d'astreintes OnCall}
+\label{fig:oncall}
+\end{figure}
+
+\subsubsection{Web UI}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.6cm and 2cm,
+  page/.style={rectangle, rounded corners=4pt, draw=accent!70,
+               fill=accent!8, minimum width=3cm, minimum height=0.8cm,
+               font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, accent!50}
+]
+  \node[page] (login) {\faIcon{lock}~Login\\JWT Auth};
+  \node[page, right=of login] (dash) {\faIcon{tachometer-alt}~Dashboard\\Vue temps réel};
+  \node[page, above right=0.5cm and 2cm of dash] (inc) {\faIcon{fire}~Incidents\\Table + Actions};
+  \node[page, right=2cm of dash] (teams) {\faIcon{users}~Teams\\Gestion équipes};
+  \node[page, below right=0.5cm and 2cm of dash] (oncall) {\faIcon{user-clock}~On-Call\\Rotations};
+
+  \draw[arrow] (login) -- node[above, font=\scriptsize] {Cookie JWT} (dash);
+  \draw[arrow] (dash) -- (inc);
+  \draw[arrow] (dash) -- (teams);
+  \draw[arrow] (dash) -- (oncall);
+
+  \node[below=1cm of dash, font=\scriptsize, text width=6cm, align=center,
+        draw=accent!30, rounded corners=3pt, fill=accent!3, inner sep=5pt] {
+    \textbf{Stack Frontend:} Jinja2 Templates + TailwindCSS CDN\\
+    Auto-refresh toutes les 30s | Responsive Design
+  };
+\end{tikzpicture}
+\caption{Navigation de l'interface Web UI}
+\label{fig:webui}
+\end{figure}
+
+\subsubsection{Metrics Exporter}
+
+\begin{techbox}{Métriques exposées (/metrics)}
+\begin{itemize}[nosep]
+  \item \tech{oncall\_incidents\_total} — Compteur total d'incidents (par sévérité)
+  \item \tech{oncall\_incidents\_active} — Jauge d'incidents actifs
+  \item \tech{oncall\_mtta\_seconds} — Histogramme Mean Time To Acknowledge
+  \item \tech{oncall\_mttr\_seconds} — Histogramme Mean Time To Resolve
+  \item \tech{oncall\_alerts\_ingested\_total} — Compteur d'alertes ingérées
+  \item \tech{oncall\_oncall\_engineers\_active} — Jauge d'ingénieurs de garde
+  \item Format : Prometheus text exposition (scrape interval : 5s)
+\end{itemize}
+\end{techbox}
+
+% ---------- Couche 3 : Communication ----------
+\subsection{Couche 3 — Communication Inter-Services}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1.5cm,
+  svc/.style={rectangle, rounded corners=6pt, draw=#1!70, fill=#1!10,
+              minimum width=3cm, minimum height=1.2cm, font=\small\bfseries,
+              align=center},
+  proto/.style={rectangle, draw=grpcblue!60, fill=grpcblue!8,
+                rounded corners=3pt, font=\scriptsize, inner sep=4pt}
+]
+  \node[svc=primary] (a) {Alert\\Ingestion};
+  \node[svc=danger, right=4cm of a] (i) {Incident\\Management};
+  \node[svc=secondary, right=4cm of i] (o) {OnCall\\Service};
+
+  % gRPC calls
+  \draw[-{Stealth[length=6pt]}, thick, grpcblue, dashed]
+    (a) -- node[above, font=\scriptsize\bfseries\color{grpcblue}] {gRPC} (i);
+  \draw[-{Stealth[length=6pt]}, thick, grpcblue, dashed]
+    (i) -- node[above, font=\scriptsize\bfseries\color{grpcblue}] {gRPC} (o);
+
+  % Proto definitions
+  \node[proto, below=0.8cm of a] (p1) {CreateIncident()\\UpdateIncident()};
+  \node[proto, below=0.8cm of i] (p2) {GetIncident()\\ListIncidents()};
+  \node[proto, below=0.8cm of o] (p3) {GetCurrentOnCall()\\ListTeams()};
+
+  \draw[dotted, grpcblue!50] (a) -- (p1);
+  \draw[dotted, grpcblue!50] (i) -- (p2);
+  \draw[dotted, grpcblue!50] (o) -- (p3);
+
+  % Redis pub/sub
+  \node[rectangle, rounded corners=4pt, draw=redisbg!70, fill=redisbg!10,
+        minimum width=2.5cm, minimum height=0.8cm, font=\small\bfseries,
+        below=3cm of i] (redis) {\color{redisbg}Redis Pub/Sub};
+
+  \draw[-{Stealth[length=5pt]}, redisbg!60] (a.south) -- ++(0,-0.5) -| (redis)
+    node[near start, right, font=\scriptsize] {PUBLISH alert:new};
+  \draw[-{Stealth[length=5pt]}, redisbg!60] (redis) -| (i.south)
+    node[near end, left, font=\scriptsize] {SUBSCRIBE};
+
+\end{tikzpicture}
+\caption{Communication inter-services : gRPC synchrone + Redis Pub/Sub asynchrone}
+\label{fig:comms}
+\end{figure}
+
+\begin{justifbox}{Justification : gRPC + Protobuf}
+\begin{itemize}[nosep]
+  \item \textbf{Performance} : sérialisation binaire Protobuf 5-10$\times$ plus rapide que JSON.
+  \item \textbf{Contrat fort} : fichiers \tech{.proto} = documentation + validation automatique.
+  \item \textbf{Streaming} : support natif du streaming bidirectionnel pour les futures évolutions.
+  \item \textbf{Code generation} : stubs Python générés automatiquement (\tech{grpcio-tools}).
+  \item \textbf{Alternatives rejetées} : REST interne (overhead HTTP, pas de contrat),
+        RabbitMQ (complexité supplémentaire, Redis suffit pour le Pub/Sub simple).
+\end{itemize}
+\end{justifbox}
+
+% ---------- Couche Data ----------
+\subsection{Couche 4 — Persistance des Données}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.8cm,
+  table/.style={rectangle, draw=postgresbg!70, fill=postgresbg!8,
+                minimum width=3.8cm, minimum height=0.7cm, font=\small},
+  cache/.style={rectangle, draw=redisbg!70, fill=redisbg!8,
+                minimum width=3.8cm, minimum height=0.7cm, font=\small},
+  title/.style={font=\small\bfseries, color=#1}
+]
+  % PostgreSQL
+  \node[title=postgresbg] (pgtitle) {\faIcon{database}~PostgreSQL 16 — Source of Truth};
+  \node[table, below=0.3cm of pgtitle] (t1) {\texttt{alerts} — Alertes brutes};
+  \node[table, below=0.15cm of t1] (t2) {\texttt{incidents} — Incidents + état};
+  \node[table, below=0.15cm of t2] (t3) {\texttt{incident\_alerts} — Liaison N:M};
+  \node[table, below=0.15cm of t3] (t4) {\texttt{teams} — Équipes};
+  \node[table, below=0.15cm of t4] (t5) {\texttt{team\_members} — Membres};
+  \node[table, below=0.15cm of t5] (t6) {\texttt{schedules} — Rotations};
+
+  % Redis
+  \node[title=redisbg, right=3cm of pgtitle] (rdtitle) {\faIcon{bolt}~Redis 7 — Cache \& Pub/Sub};
+  \node[cache, below=0.3cm of rdtitle] (r1) {\texttt{corr:\{hash\}} — Corrélation (TTL 5m)};
+  \node[cache, below=0.15cm of r1] (r2) {\texttt{dedup:\{fp\}} — Déduplication};
+  \node[cache, below=0.15cm of r2] (r3) {\texttt{alert:new} — Canal Pub/Sub};
+  \node[cache, below=0.15cm of r3] (r4) {\texttt{webhooks} — Config webhooks};
+  \node[cache, below=0.15cm of r4] (r5) {\texttt{metrics:*} — Cache métriques};
+
+  % Boxes
+  \node[draw=postgresbg!40, rounded corners=6pt, fit=(pgtitle)(t6),
+        inner sep=8pt] {};
+  \node[draw=redisbg!40, rounded corners=6pt, fit=(rdtitle)(r5),
+        inner sep=8pt] {};
+
+\end{tikzpicture}
+\caption{Modèle de données — PostgreSQL (persistant) + Redis (éphémère)}
+\label{fig:data}
+\end{figure}
+
+\begin{justifbox}{Justification : PostgreSQL + Redis}
+\begin{itemize}[nosep]
+  \item \textbf{PostgreSQL} : ACID complet, JSONB pour métadonnées flexibles,
+        requêtes analytiques performantes (trends, MTTR).
+  \item \textbf{SQLAlchemy Async 2.0} : ORM avec support \tech{asyncpg} —
+        performances optimales sans bloquer l'event loop FastAPI.
+  \item \textbf{Redis} : latence sub-milliseconde pour la corrélation en temps réel,
+        TTL natif pour l'expiration des fenêtres, Pub/Sub intégré.
+  \item \textbf{Séparation des responsabilités} : PostgreSQL = source de vérité,
+        Redis = cache transitoire.
+\end{itemize}
+\end{justifbox}
+
+% =============================================================================
+% SECTION 4 : SÉCURITÉ
+% =============================================================================
+\section{Sécurité}
+
+\subsection{Architecture d'Authentification JWT}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.8cm and 2cm,
+  step/.style={rectangle, rounded corners=4pt, draw=danger!60,
+               fill=danger!8, minimum width=4.5cm, minimum height=0.8cm,
+               font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, danger!50}
+]
+  \node[step] (login) {1. POST /login\\username + password};
+  \node[step, below=of login] (verify) {2. authenticate\_user()\\Vérification credentials (.env)};
+  \node[step, below=of verify] (jwt) {3. create\_jwt\_token()\\HMAC-SHA256, exp=24h};
+  \node[step, below=of jwt] (cookie) {4. Set-Cookie: token=\{jwt\}\\HttpOnly, Path=/};
+  \node[step, below=of cookie] (mid) {5. Middleware Auth\\Vérifie JWT sur chaque requête};
+  \node[step, below=of mid] (access) {6. Accès autorisé\\user injecté dans le contexte};
+
+  \draw[arrow] (login) -- (verify);
+  \draw[arrow] (verify) -- (jwt);
+  \draw[arrow] (jwt) -- (cookie);
+  \draw[arrow] (cookie) -- (mid);
+  \draw[arrow] (mid) -- (access);
+
+  \node[right=2cm of jwt, text width=5cm, font=\scriptsize,
+        draw=danger!30, fill=danger!3, rounded corners=3pt, inner sep=6pt] (payload) {
+    \textbf{JWT Payload:}\\[3pt]
+    \texttt{\{}\\
+    \texttt{~~"sub": "admin",}\\
+    \texttt{~~"role": "admin",}\\
+    \texttt{~~"exp": 1738454400,}\\
+    \texttt{~~"iat": 1738368000}\\
+    \texttt{\}}\\[5pt]
+    \textbf{Algorithme:} HS256\\
+    \textbf{Secret:} via \$JWT\_SECRET
+  };
+  \draw[dashed, danger!30] (jwt) -- (payload);
+\end{tikzpicture}
+\caption{Flux d'authentification JWT — du login à l'accès protégé}
+\label{fig:jwt}
+\end{figure}
+
+\begin{warnbox}{Mesures de Sécurité}
+\begin{multicols}{2}
+\begin{itemize}[nosep]
+  \item[\cmark] JWT HMAC-SHA256
+  \item[\cmark] Expiration 24h configurable
+  \item[\cmark] Secrets via variables d'env
+  \item[\cmark] Rate limiting Traefik (100/s)
+  \item[\cmark] Cookie HttpOnly
+  \item[\cmark] Pas de credentials en dur
+  \item[\cmark] Endpoints sensibles protégés
+  \item[\cmark] Bearer token pour API
+  \item[\cmark] Middleware global Web UI
+  \item[\cmark] Support multi-utilisateurs
+\end{itemize}
+\end{multicols}
+\end{warnbox}
+
+% =============================================================================
+% SECTION 5 : OBSERVABILITÉ
+% =============================================================================
+\section{Stack d'Observabilité}
+
+\subsection{Les 3 Piliers}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  pillar/.style={rectangle, rounded corners=8pt, draw=#1!70, fill=#1!10,
+                 minimum width=4.5cm, minimum height=3cm, font=\small, align=center},
+  title/.style={font=\bfseries\color{#1}}
+]
+  \node[pillar=prometheusbg] (metrics) {
+    \title{prometheusbg}{Métriques}\\[5pt]
+    Prometheus\\scrape 5s\\[3pt]
+    Grafana dashboards\\MTTA / MTTR / Trends
+  };
+  \node[pillar=jaegerbg, right=1cm of metrics] (traces) {
+    \title{jaegerbg}{Traces}\\[5pt]
+    Jaeger\\OpenTelemetry\\[3pt]
+    Tracing distribué\\Latence end-to-end
+  };
+  \node[pillar=lokibg, right=1cm of traces] (logs) {
+    \title{lokibg}{Logs}\\[5pt]
+    Loki + Promtail\\Agrégation centralisée\\[3pt]
+    Labels par service\\Requêtes LogQL
+  };
+
+  % Grafana unificateur
+  \node[rectangle, rounded corners=6pt, draw=grafanabg!80, fill=grafanabg!15,
+        minimum width=14.5cm, minimum height=1cm, font=\bfseries,
+        below=1cm of traces] (grafana)
+    {\faIcon{chart-area}~Grafana 10.3 — Vue Unifiée (Métriques + Traces + Logs)};
+
+  \draw[-{Stealth[length=5pt]}, thick, prometheusbg!60] (metrics) -- (grafana);
+  \draw[-{Stealth[length=5pt]}, thick, jaegerbg!60] (traces) -- (grafana);
+  \draw[-{Stealth[length=5pt]}, thick, lokibg!60] (logs) -- (grafana);
+\end{tikzpicture}
+\caption{Les 3 piliers de l'observabilité unifiés dans Grafana}
+\label{fig:observability}
+\end{figure}
+
+\begin{justifbox}{Justification : Stack LGTM (Loki, Grafana, Tempo→Jaeger, Mimir→Prometheus)}
+\begin{itemize}[nosep]
+  \item \textbf{Standard industriel} : stack Grafana Labs / CNCF, utilisée par les leaders du marché.
+  \item \textbf{OpenTelemetry} : standard vendeur-neutre pour l'instrumentation — un seul SDK pour
+        métriques, traces et logs.
+  \item \textbf{Corrélation} : Grafana permet de naviguer d'une métrique → une trace → des logs
+        d'un seul clic.
+  \item \textbf{Alternatives rejetées} : ELK Stack (lourd, license), Datadog (SaaS payant),
+        New Relic (pas 100\% local).
+\end{itemize}
+\end{justifbox}
+
+% =============================================================================
+% SECTION 6 : FONCTIONNALITÉS BONUS
+% =============================================================================
+\section{Fonctionnalités Bonus}
+
+\subsection{Vue d'ensemble}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{c l l c X}
+\toprule
+\textbf{\#} & \textbf{Bonus} & \textbf{Technologie} & \textbf{Statut} & \textbf{Description} \\
+\midrule
+1 & Notifications Email    & MailHog / SMTP      & \cmark & Envoi d'emails lors des changements d'état \\
+2 & Webhooks               & HMAC-SHA256         & \cmark & Dispatch sécurisé vers URLs externes \\
+3 & Escalade Automatique   & Cron + gRPC         & \cmark & Escalade après timeout (30 min) \\
+4 & Analytics Historiques  & SQL + agrégations   & \cmark & Trends, MTTR distribution, rapports \\
+5 & Agrégation de Logs     & Loki 3.0 + Promtail & $\sim$ & Code présent, limité sur Windows Docker \\
+6 & Tracing Distribué      & Jaeger + OTLP       & \cmark & Traces end-to-end inter-services \\
+7 & Scaling Horizontal     & Docker Compose      & \cmark & \texttt{--scale alert-ingestion=3} \\
+\bottomrule
+\end{tabularx}
+\caption{Tableau récapitulatif des 7 fonctionnalités bonus}
+\end{table}
+
+% ---------- Bonus 1 : Email ----------
+\subsection{Bonus 1 — Notifications Email}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1cm and 2cm,
+  box/.style={rectangle, rounded corners=4pt, draw=primary!60, fill=primary!8,
+              minimum width=3cm, minimum height=0.8cm, font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, primary!50}
+]
+  \node[box] (event) {Événement\\(create/ack/resolve)};
+  \node[box, right=of event] (build) {build\_incident\_email()\\Sujet + Corps HTML};
+  \node[box, right=of build] (send) {send\_notification\_email()\\SMTP :1025};
+  \node[box, right=of send, draw=secondary!60, fill=secondary!8]
+    (mailhog) {\faIcon{envelope}~MailHog\\UI :8025};
+
+  \draw[arrow] (event) -- (build);
+  \draw[arrow] (build) -- (send);
+  \draw[arrow] (send) -- (mailhog);
+\end{tikzpicture}
+\caption{Pipeline de notification email via MailHog}
+\end{figure}
+
+\begin{techbox}{Détails techniques — Email}
+\begin{itemize}[nosep]
+  \item \textbf{Transport} : SMTP standard (port 1025), compatible SendGrid en production.
+  \item \textbf{MailHog} : capture tous les emails localement sans envoi réel — parfait pour le développement.
+  \item \textbf{Templates} : emails HTML formatés avec sévérité, titre, timestamp.
+  \item \textbf{Configuration} : \tech{SMTP\_HOST}, \tech{SMTP\_PORT}, \tech{SMTP\_FROM} via \texttt{.env}.
+\end{itemize}
+\end{techbox}
+
+% ---------- Bonus 2 : Webhooks ----------
+\subsection{Bonus 2 — Webhooks Sécurisés}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.7cm and 1.5cm,
+  box/.style={rectangle, rounded corners=4pt, draw=accent!60, fill=accent!8,
+              minimum width=3.5cm, minimum height=0.8cm, font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, accent!50}
+]
+  \node[box] (event) {Incident créé/modifié};
+  \node[box, below=of event] (load) {load\_webhooks\_from\_redis()};
+  \node[box, below=of load] (sign) {HMAC-SHA256 Signature\\X-Webhook-Signature};
+  \node[box, below=of sign] (dispatch) {POST → URL cible\\httpx.AsyncClient};
+
+  \draw[arrow] (event) -- (load);
+  \draw[arrow] (load) -- (sign);
+  \draw[arrow] (sign) -- (dispatch);
+
+  \node[right=2cm of sign, text width=5cm, font=\scriptsize,
+        draw=accent!30, fill=accent!3, rounded corners=3pt, inner sep=6pt] {
+    \textbf{Payload webhook:}\\[3pt]
+    \texttt{\{event, incident\_id,}\\
+    \texttt{~~title, severity, status,}\\
+    \texttt{~~timestamp, source\}}\\[5pt]
+    \textbf{Header:}\\
+    \texttt{X-Webhook-Signature:}\\
+    \texttt{sha256=\{hmac\}}
+  };
+\end{tikzpicture}
+\caption{Architecture du système de webhooks}
+\end{figure}
+
+% ---------- Bonus 3 : Escalade ----------
+\subsection{Bonus 3 — Escalade Automatique}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1cm,
+  step/.style={rectangle, rounded corners=4pt, draw=danger!60, fill=danger!8,
+               minimum width=5cm, minimum height=0.8cm, font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, danger!50}
+]
+  \node[step] (detect) {\faIcon{clock}~Détection timeout\\Incident FIRING > 30 min sans ACK};
+  \node[step, below=of detect] (grpc) {\faIcon{phone}~gRPC → OnCall Service\\GetCurrentOnCall(level=N+1)};
+  \node[step, below=of grpc] (notify) {\faIcon{bell}~Notification\\Email + Webhook au nouveau responsable};
+  \node[step, below=of notify] (update) {\faIcon{edit}~Mise à jour\\status=ESCALATED, assignee=nouveau};
+
+  \draw[arrow] (detect) -- (grpc);
+  \draw[arrow] (grpc) -- (notify);
+  \draw[arrow] (notify) -- (update);
+\end{tikzpicture}
+\caption{Processus d'escalade automatique multi-niveaux}
+\end{figure}
+
+% ---------- Bonus 4 : Analytics ----------
+\subsection{Bonus 4 — Analytics Historiques}
+
+\begin{techbox}{Endpoints Analytics}
+\begin{itemize}[nosep]
+  \item \textbf{GET /api/v1/analytics/trends}
+  \begin{itemize}[nosep]
+    \item Paramètres : \texttt{days} (défaut 30), \texttt{severity}
+    \item Retourne : incidents par jour, par sévérité, totaux
+    \item Requête SQL avec \texttt{GROUP BY date\_trunc('day', created\_at)}
+  \end{itemize}
+  \item \textbf{GET /api/v1/analytics/mttr-distribution}
+  \begin{itemize}[nosep]
+    \item Distribution des temps de résolution
+    \item Calcul des percentiles P50, P90, P99
+    \item Segmentation par sévérité (critical, high, medium, low)
+  \end{itemize}
+\end{itemize}
+\end{techbox}
+
+% ---------- Bonus 5 : Loki ----------
+\subsection{Bonus 5 — Agrégation de Logs (Loki)}
+
+\begin{techbox}{Architecture Loki}
+\begin{itemize}[nosep]
+  \item \textbf{Loki 3.0} : stockage et indexation des logs par labels (pas full-text).
+  \item \textbf{Promtail} : agent de collecte qui scrape les logs Docker.
+  \item \textbf{LokiHandler} (Python) : handler \tech{logging.Handler} custom qui push
+        directement vers l'API HTTP Loki (\texttt{/loki/api/v1/push}).
+  \item \textbf{Labels} : \texttt{service}, \texttt{level}, \texttt{environment}.
+  \item \textbf{Note} : fonctionnel sur Linux, limité sur Windows Docker Desktop
+        (incompatibilité API Docker socket pour Promtail).
+\end{itemize}
+\end{techbox}
+
+% ---------- Bonus 6 : Jaeger ----------
+\subsection{Bonus 6 — Tracing Distribué (Jaeger)}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.5cm and 2.5cm,
+  svc/.style={rectangle, rounded corners=6pt, draw=jaegerbg!70, fill=jaegerbg!10,
+              minimum width=2.8cm, minimum height=1cm, font=\small\bfseries,
+              align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, jaegerbg!60}
+]
+  \node[svc] (client) {Client HTTP};
+  \node[svc, right=of client] (alert) {Alert\\Ingestion};
+  \node[svc, right=of alert] (incident) {Incident\\Management};
+  \node[svc, right=of incident] (oncall) {OnCall\\Service};
+
+  \draw[arrow] (client) -- node[above, font=\scriptsize] {trace-id} (alert);
+  \draw[arrow] (alert) -- node[above, font=\scriptsize] {span} (incident);
+  \draw[arrow] (incident) -- node[above, font=\scriptsize] {span} (oncall);
+
+  % Jaeger collector
+  \node[rectangle, rounded corners=6pt, draw=jaegerbg!80, fill=jaegerbg!20,
+        minimum width=10cm, minimum height=1cm, font=\small\bfseries,
+        below=1.5cm of incident] (jaeger)
+    {\faIcon{search}~Jaeger Collector — OTLP gRPC :4317 / HTTP :4318};
+
+  \draw[arrow, dotted] (alert.south) -- (jaeger);
+  \draw[arrow, dotted] (incident.south) -- (jaeger);
+  \draw[arrow, dotted] (oncall.south) -- (jaeger);
+
+  % Annotation
+  \node[below=0.3cm of jaeger, font=\scriptsize\color{dark!50}] {
+    UI : http://localhost:16686 — Visualisation des traces \& spans
+  };
+\end{tikzpicture}
+\caption{Propagation des traces distribuées via OpenTelemetry → Jaeger}
+\end{figure}
+
+\begin{justifbox}{Justification : OpenTelemetry + Jaeger}
+\begin{itemize}[nosep]
+  \item \textbf{OpenTelemetry} : standard CNCF vendeur-neutre — instrumentation une seule fois,
+        exportation vers n'importe quel backend (Jaeger, Zipkin, Datadog\ldots).
+  \item \textbf{Propagation automatique} : le \tech{trace-id} est propagé dans les headers HTTP
+        et métadonnées gRPC entre tous les services.
+  \item \textbf{Jaeger All-in-One} : déploiement simplifié (collector + query + UI en 1 conteneur).
+  \item \textbf{Impact performances} : overhead < 3\% grâce au sampling.
+\end{itemize}
+\end{justifbox}
+
+% ---------- Bonus 7 : Scaling ----------
+\subsection{Bonus 7 — Scaling Horizontal}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.5cm and 1cm,
+  instance/.style={rectangle, rounded corners=4pt, draw=primary!60, fill=primary!8,
+                   minimum width=2.2cm, minimum height=0.8cm, font=\small, align=center},
+  lb/.style={rectangle, rounded corners=6pt, draw=traefikbg!80, fill=traefikbg!15,
+             minimum width=3.5cm, minimum height=1.2cm, font=\small\bfseries,
+             align=center}
+]
+  \node[lb] (traefik) {\faIcon{balance-scale}~Traefik\\Load Balancer};
+
+  \node[instance, below left=1.5cm and 1cm of traefik] (i1) {Instance 1\\:8001 (dyn)};
+  \node[instance, below=1.5cm of traefik] (i2) {Instance 2\\:8001 (dyn)};
+  \node[instance, below right=1.5cm and 1cm of traefik] (i3) {Instance 3\\:8001 (dyn)};
+
+  \draw[-{Stealth[length=5pt]}, thick, traefikbg!60] (traefik) -- (i1);
+  \draw[-{Stealth[length=5pt]}, thick, traefikbg!60] (traefik) -- (i2);
+  \draw[-{Stealth[length=5pt]}, thick, traefikbg!60] (traefik) -- (i3);
+
+  % Labels
+  \node[above=0.3cm of traefik, font=\scriptsize\color{dark!50}] {
+    docker compose up --scale alert-ingestion=3
+  };
+  \node[below=0.3cm of i2, font=\scriptsize\color{dark!50}, text width=8cm, align=center] {
+    Pas de port hôte fixe — Traefik découvre automatiquement\\
+    les instances via les labels Docker et répartit la charge (round-robin)
+  };
+\end{tikzpicture}
+\caption{Scaling horizontal du service Alert Ingestion via Docker Compose}
+\end{figure}
+
+\begin{justifbox}{Justification : Scaling via Docker Compose + Traefik}
+\begin{itemize}[nosep]
+  \item \textbf{Zéro configuration supplémentaire} : Traefik découvre les conteneurs
+        automatiquement via l'API Docker.
+  \item \textbf{Port dynamique} : le service n'a pas de port hôte fixe, évitant les
+        conflits lors du scaling.
+  \item \textbf{Load balancing} : round-robin natif entre les instances.
+  \item \textbf{Commande unique} : \texttt{docker compose up -d --scale alert-ingestion=3}.
+\end{itemize}
+\end{justifbox}
+
+% =============================================================================
+% SECTION 7 : CHOIX TECHNIQUES & JUSTIFICATIONS
+% =============================================================================
+\section{Synthèse des Choix Techniques}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l l X X}
+\toprule
+\textbf{Composant} & \textbf{Choix} & \textbf{Justification} & \textbf{Alternative rejetée} \\
+\midrule
+Langage        & Python 3.11       & Écosystème riche, async natif, prototypage rapide
+                                   & Go (temps de dev), Java (verbosité) \\
+Framework API  & FastAPI 0.109     & Async natif, validation Pydantic, OpenAPI auto
+                                   & Flask (sync), Django (monolithique) \\
+Communication  & gRPC + Protobuf   & Contrat fort, perf binaire, génération de code
+                                   & REST interne (pas de contrat) \\
+BDD            & PostgreSQL 16     & ACID, JSONB, performances analytiques
+                                   & MongoDB (pas ACID), MySQL (moins de features) \\
+Cache          & Redis 7           & Sub-ms latence, TTL natif, Pub/Sub intégré
+                                   & Memcached (pas de Pub/Sub) \\
+ORM            & SQLAlchemy 2.0    & Async (asyncpg), migrations, mature
+                                   & Tortoise (moins mature), raw SQL \\
+Gateway        & Traefik v3        & Auto-discovery Docker, rate limiting, dashboard
+                                   & Nginx (config statique), Kong (lourd) \\
+Conteneurs     & Docker Compose    & Orchestration simple, 100\% local, reproductible
+                                   & Kubernetes (overkill pour local) \\
+Métriques      & Prometheus        & Pull model, PromQL puissant, standard k8s
+                                   & InfluxDB (push model), StatsD \\
+Dashboards     & Grafana 10.3      & Multi-datasource, alerting, communauté
+                                   & Kibana (ELK only) \\
+Tracing        & Jaeger + OTel     & CNCF, vendeur-neutre, all-in-one
+                                   & Zipkin (moins de features), X-Ray (AWS only) \\
+Auth           & JWT HS256         & Stateless, standard, simple à implémenter
+                                   & OAuth2 (complexe pour local), sessions \\
+Email test     & MailHog           & Capture locale, UI web, zéro config
+                                   & Mailtrap (SaaS), Papercut \\
+\bottomrule
+\end{tabularx}
+\caption{Matrice décisionnelle des choix technologiques}
+\end{table}
+
+% =============================================================================
+% SECTION 8 : DÉPLOIEMENT
+% =============================================================================
+\section{Déploiement \& Utilisation}
+
+\subsection{Architecture de Build}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.7cm,
+  stage/.style={rectangle, rounded corners=4pt, draw=dark!60, fill=dark!8,
+                minimum width=6cm, minimum height=0.8cm, font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick, dark!40}
+]
+  \node[stage, fill=primary!8, draw=primary!60] (s1) {\textbf{Stage 1 — Builder}\\python:3.11-alpine + protoc + grpcio-tools};
+  \node[stage, below=of s1] (s2) {Compilation Protobuf\\*.proto → *\_pb2.py + *\_pb2\_grpc.py};
+  \node[stage, below=of s2] (s3) {Installation dépendances\\pip install -r requirements.txt};
+  \node[stage, fill=secondary!8, draw=secondary!60, below=of s3]
+    (s4) {\textbf{Stage 2 — Runtime}\\Image finale allégée (< 150 MB)};
+
+  \draw[arrow] (s1) -- (s2);
+  \draw[arrow] (s2) -- (s3);
+  \draw[arrow] (s3) -- (s4);
+
+  \node[right=1.5cm of s1, text width=4cm, font=\scriptsize, align=left,
+        draw=primary!30, fill=primary!3, rounded corners=3pt, inner sep=6pt] {
+    \textbf{Multi-stage build:}\\
+    Sépare les outils de\\compilation de l'image\\
+    finale pour réduire\\la surface d'attaque\\et la taille de l'image.
+  };
+\end{tikzpicture}
+\caption{Dockerfile multi-stage pour les microservices}
+\end{figure}
+
+\subsection{Commandes de Déploiement}
+
+\begin{techbox}{Lancement rapide (PowerShell — Windows)}
+\begin{lstlisting}[language=bash, backgroundcolor=\color{codebg}, basicstyle=\ttfamily\small\color{white}]
+# Deploiement complet (14 conteneurs)
+powershell -ExecutionPolicy Bypass -File .\run.ps1 deploy
+
+# Demo complete pour le jury (7 etapes automatisees)
+powershell -ExecutionPolicy Bypass -File .\run.ps1 full-demo
+
+# Scaling horizontal (3 instances)
+powershell -ExecutionPolicy Bypass -File .\run.ps1 scale 3
+
+# Analytics et metriques
+powershell -ExecutionPolicy Bypass -File .\run.ps1 analytics
+\end{lstlisting}
+\end{techbox}
+
+\subsection{URLs d'Accès}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Service} & \textbf{URL} & \textbf{Description} \\
+\midrule
+Web UI (Dashboard)    & \url{http://localhost:8080}  & Interface principale (login requis) \\
+API Gateway (Traefik) & \url{http://localhost:80}    & Point d'entrée API REST \\
+Traefik Dashboard     & \url{http://localhost:8888}  & Visualisation des routes \\
+Grafana               & \url{http://localhost:3000}  & Dashboards (admin/admin) \\
+Prometheus            & \url{http://localhost:9091}  & Interface requêtes PromQL \\
+Jaeger UI             & \url{http://localhost:16686} & Tracing distribué \\
+MailHog               & \url{http://localhost:8025}  & Emails capturés \\
+\bottomrule
+\end{tabularx}
+\caption{Points d'accès de la plateforme}
+\end{table}
+
+% =============================================================================
+% SECTION 9 : KPI ET MÉTRIQUES
+% =============================================================================
+\section{KPI \& Métriques Clés}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  kpi/.style={rectangle, rounded corners=8pt, draw=#1!70, fill=#1!10,
+              minimum width=3.5cm, minimum height=2.5cm, font=\small,
+              align=center, drop shadow={shadow xshift=1pt, shadow yshift=-1pt}}
+]
+  \node[kpi=primary] (kpi1) {
+    \textbf{\large MTTA}\\[5pt]
+    Mean Time\\To Acknowledge\\[3pt]
+    \faIcon{clock}~Temps moyen\\de prise en charge
+  };
+  \node[kpi=danger, right=0.8cm of kpi1] (kpi2) {
+    \textbf{\large MTTR}\\[5pt]
+    Mean Time\\To Resolve\\[3pt]
+    \faIcon{tools}~Temps moyen\\de résolution
+  };
+  \node[kpi=secondary, right=0.8cm of kpi2] (kpi3) {
+    \textbf{\large Corrélation}\\[5pt]
+    Ratio alertes\\→ incidents\\[3pt]
+    \faIcon{compress-arrows-alt}~Réduction\\du bruit
+  };
+  \node[kpi=accent, right=0.8cm of kpi3] (kpi4) {
+    \textbf{\large Escalade}\\[5pt]
+    \% incidents\\escaladés\\[3pt]
+    \faIcon{level-up-alt}~Couverture\\astreinte
+  };
+\end{tikzpicture}
+\caption{Les 4 KPI opérationnels suivis par la plateforme}
+\end{figure}
+
+% =============================================================================
+% SECTION 10 : CONCLUSION
+% =============================================================================
+\section{Conclusion}
+
+\begin{techbox}{Récapitulatif}
+\textbf{OnCallNova} démontre qu'il est possible de construire une plateforme de gestion
+d'incidents de niveau production avec :
+\begin{itemize}[nosep]
+  \item \textbf{5 microservices} communicant en gRPC + REST
+  \item \textbf{14 conteneurs} Docker Compose orchestrés par Traefik
+  \item \textbf{Observabilité complète} : Prometheus + Grafana + Jaeger + Loki
+  \item \textbf{7 fonctionnalités bonus} implémentées (6 pleinement fonctionnelles)
+  \item \textbf{Sécurité} : JWT, rate limiting, secrets externalisés
+  \item \textbf{100\% local} — aucune dépendance cloud, déployable en une commande
+\end{itemize}
+\end{techbox}
+
+\vspace{1cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[rectangle, rounded corners=10pt, draw=primary!60, fill=primary!5,
+        minimum width=12cm, minimum height=2cm, font=\large, align=center] {
+    \faIcon{rocket}~\textbf{Déploiement en une commande :}\\[5pt]
+    \texttt{powershell -ExecutionPolicy Bypass -File .\textbackslash run.ps1 full-demo}
+  };
+\end{tikzpicture}
+\end{center}
+
+% =============================================================================
+\end{document}

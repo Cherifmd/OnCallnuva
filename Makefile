@@ -153,7 +153,7 @@ webhook-register:
 	@echo "Registering test webhook..."
 	curl -X POST http://localhost:8002/api/v1/webhooks \
 		-H "Content-Type: application/json" \
-		-d '{"url":"https://httpbin.org/post","events":["incident.new","incident.resolved","incident.escalated"]}'
+		-d '{"url":"http://incident-management:8002/api/v1/webhooks/test","events":["incident.new","incident.resolved","incident.escalated"]}'
 	@echo ""
 
 # ==================== BONUS: ANALYTICS (Bonus 4) ====================

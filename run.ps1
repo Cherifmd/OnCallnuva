@@ -297,7 +297,7 @@ function Cmd-Webhooks {
 function Cmd-WebhookAdd {
     Write-Header "ENREGISTREMENT D'UN WEBHOOK"
     $body = @{
-        url    = "https://httpbin.org/post"
+        url    = "http://incident-management:8002/api/v1/webhooks/test"
         events = @("incident.new", "incident.resolved", "incident.escalated")
     } | ConvertTo-Json -Depth 3
 

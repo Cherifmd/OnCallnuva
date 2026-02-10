@@ -9,6 +9,9 @@ import os
 import json
 import logging
 import asyncio
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 
@@ -61,10 +64,6 @@ async def send_email_sendgrid(to_email: str, subject: str, html_body: str) -> bo
 
 async def send_email_smtp(to_email: str, subject: str, html_body: str) -> bool:
     """Send email via SMTP (local MailHog for testing)."""
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-
     if not SMTP_ENABLED:
         logger.debug("SMTP not enabled, skipping email")
         return False

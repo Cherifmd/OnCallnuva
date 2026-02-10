@@ -216,6 +216,14 @@ async def correlate_alert(
             # Trigger on-call notification (async, non-blocking)
             asyncio.create_task(_notify_oncall(incident_id, service_name, severity))
 
+            # Bonus 1: Always send email notification for new incidents
+            subject, html = build_incident_email(
+                incident_id, f"[{severity.upper()}] Alert on {service_name}",
+                severity, service_name, "on-call", event="new"
+            )
+            NOTIFICATIONS_SENT.labels(channel="email").inc()
+            asyncio.create_task(send_notification_email("oncall@incident-platform.local", subject, html))
+
             CORRELATION_TIME.observe(time.time() - start)
             return {
                 "alert_id": alert_id,
@@ -236,12 +244,14 @@ async def _notify_oncall(incident_id: str, service_name: str, severity: str):
         from generated import incidents_pb2, incidents_pb2_grpc
         host = os.getenv("ONCALL_HOST", "oncall-service")
         port = os.getenv("ONCALL_GRPC_PORT", "50053")
+        logger.info(f"Contacting on-call gRPC at {host}:{port} for incident {incident_id}")
         async with grpc_aio.insecure_channel(f"{host}:{port}") as channel:
             stub = incidents_pb2_grpc.OnCallServiceStub(channel)
             response = await stub.GetCurrentOnCall(
                 incidents_pb2.OnCallQuery(service_name=service_name),
                 timeout=5.0,
             )
+            logger.info(f"On-call response: user_id={response.user_id}, email={response.email}")
             if response.user_id:
                 # Update incident assignment
                 session = await get_session()
@@ -718,6 +728,15 @@ async def _escalation_monitor():
                                     "new_level": resp.new_level,
                                     "assigned_to": resp.next_user_name,
                                 }))
+                                # Bonus 1: Send escalation email
+                                esc_subj, esc_html = build_incident_email(
+                                    inc.id, f"[ESCALATION L{resp.new_level}] {inc.service_name}",
+                                    inc.severity, inc.service_name,
+                                    resp.next_user_name, event="escalation"
+                                )
+                                NOTIFICATIONS_SENT.labels(channel="email").inc()
+                                to_email = "oncall@incident-platform.local"
+                                asyncio.create_task(send_notification_email(to_email, esc_subj, esc_html))
                     except Exception as e:
                         logger.warning(f"Escalation gRPC call failed: {e}")
             finally:
@@ -743,6 +762,14 @@ async def api_register_webhook(req: WebhookRegisterRequest, request: Request):
     result = register_webhook(req.url, req.events, req.secret or "")
     await save_webhooks_to_redis()
     return result
+
+
+@app.post("/api/v1/webhooks/test")
+async def api_webhook_test_receiver(request: Request):
+    """Local webhook receiver for offline testing (no internet needed)."""
+    body = await request.json()
+    logger.info(f"Webhook test received: {body.get('event', 'unknown')} - {body.get('incident_id', 'N/A')}")
+    return {"status": "received", "event": body.get("event", "unknown")}
 
 
 @app.get("/api/v1/webhooks")
