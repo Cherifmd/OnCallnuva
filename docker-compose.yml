@@ -85,7 +85,7 @@ services:
     deploy:
       replicas: 1   # Bonus 7: Scale with --scale alert-ingestion=N
     ports:
-      - "8001"   # Dynamic port mapping to allow scaling; access via Traefik :80
+      - "8001:8001"   # Fixed port for direct access + Traefik LB
     depends_on:
       postgres:
         condition: service_healthy
@@ -265,7 +265,7 @@ services:
       - "80:80"
       - "8888:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - //./pipe/docker_engine:/var/run/docker.sock:ro
       - ./config/traefik/dynamic:/etc/traefik/dynamic:ro
     networks:
       - oncall-network
@@ -292,7 +292,7 @@ services:
     volumes:
       - ./config/loki/promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - //./pipe/docker_engine:/var/run/docker.sock:ro
     command: -config.file=/etc/promtail/config.yml
     depends_on:
       - loki

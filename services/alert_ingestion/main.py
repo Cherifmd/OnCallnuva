@@ -179,6 +179,7 @@ instrument_fastapi(app)
 
 
 @app.get("/health")
+@app.get("/api/v1/alerts/health")
 async def health():
     return {"status": "healthy", "service": "alert-ingestion", "timestamp": datetime.utcnow().isoformat()}
 

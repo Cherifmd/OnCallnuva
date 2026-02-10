@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelna
 logger = logging.getLogger("oncall-service")
 
 # ======================== PROMETHEUS METRICS ========================
-ESCALATIONS_TOTAL = Counter("escalations_total", "Total escalations triggered", ["service"])
+ESCALATIONS_TOTAL = Counter("escalations_total", "Total escalations triggered", ["team"])
 ONCALL_QUERIES = Counter("oncall_queries_total", "On-call lookups")
 SCHEDULE_UPDATES = Counter("schedule_updates_total", "Schedule modifications")
 CACHE_HITS = Counter("oncall_cache_hits_total", "Redis cache hits")
@@ -153,7 +153,7 @@ async def trigger_escalation(incident_id: str, service_name: str, current_level:
             )
             session.add(log_entry)
             await session.commit()
-            ESCALATIONS_TOTAL.labels(service=service_name).inc()
+            ESCALATIONS_TOTAL.labels(team=service_name).inc()
 
             # Invalidate cache
             await cache_delete(f"oncall:{service_name}:current")

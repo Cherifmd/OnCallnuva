@@ -60,7 +60,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$BASE = "http://localhost:80"
+$BASE = "http://localhost:8001"
 $INCIDENT = "http://localhost:8002"
 
 # ---------- Helpers ----------
@@ -179,7 +179,7 @@ function Cmd-Health {
     Write-Header "SANTE DES SERVICES"
 
     Write-Host "  --- Microservices ---" -ForegroundColor Yellow
-    Check-Health "Alert Ingestion (via Traefik)" "$BASE/api/v1/alerts"
+    Check-Health "Alert Ingestion"               "$BASE/health"
     Check-Health "Incident Management"           "$INCIDENT/health"
     Check-Health "On-Call Service"                "http://localhost:8003/health"
     Check-Health "Web UI"                         "http://localhost:8080/health"

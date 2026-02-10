@@ -61,10 +61,12 @@ def _check_api_auth(request: Request):
         raise HTTPException(status_code=401, detail="Authentication required. Provide a valid Bearer token.")
 
 # ======================== PROMETHEUS METRICS ========================
-INCIDENTS_CREATED = Counter("incidents_created_total", "Total incidents created", ["severity"])
-INCIDENTS_CORRELATED = Counter("alerts_correlated_total", "Alerts correlated into existing incidents")
+INCIDENTS_TOTAL = Counter("incidents_total", "Total incident state transitions", ["status"])
+INCIDENT_CREATIONS = Counter("incident_creations_total", "Total incidents created", ["severity"])
+INCIDENTS_CORRELATED = Counter("alerts_correlated_total", "Alerts correlated or created", ["result"])
 INCIDENTS_ACKNOWLEDGED = Counter("incidents_acknowledged_total", "Incidents acknowledged")
 INCIDENTS_RESOLVED = Counter("incidents_resolved_total", "Incidents resolved")
+NOTIFICATIONS_SENT = Counter("oncall_notifications_sent_total", "Total notifications sent", ["channel"])
 MTTA_HISTOGRAM = Histogram("mtta_seconds", "Mean Time To Acknowledge", buckets=[30, 60, 120, 300, 600, 1800, 3600])
 MTTR_HISTOGRAM = Histogram("mttr_seconds", "Mean Time To Resolve", buckets=[60, 300, 600, 1800, 3600, 7200, 14400])
 OPEN_INCIDENTS = Gauge("open_incidents_count", "Current open incidents")
@@ -159,7 +161,7 @@ async def correlate_alert(
             session.add(alert)
             await session.commit()
 
-            INCIDENTS_CORRELATED.inc()
+            INCIDENTS_CORRELATED.labels(result="correlated").inc()
             logger.info(
                 f"Alert {alert_id} correlated into incident {existing_incident.id} "
                 f"(count: {existing_incident.alert_count})"
@@ -188,7 +190,9 @@ async def correlate_alert(
             session.add(alert)
             await session.commit()
 
-            INCIDENTS_CREATED.labels(severity=severity).inc()
+            INCIDENT_CREATIONS.labels(severity=severity).inc()
+            INCIDENTS_TOTAL.labels(status="triggered").inc()
+            INCIDENTS_CORRELATED.labels(result="new_incident").inc()
             OPEN_INCIDENTS.inc()
             logger.info(f"New incident {incident_id} created from alert {alert_id}")
 
@@ -201,6 +205,7 @@ async def correlate_alert(
             })
 
             # Webhook notification (Bonus 2)
+            NOTIFICATIONS_SENT.labels(channel="webhook").inc()
             asyncio.create_task(dispatch_webhook("incident.new", {
                 "incident_id": incident_id,
                 "title": incident.title,
@@ -258,6 +263,7 @@ async def _notify_oncall(incident_id: str, service_name: str, severity: str):
                         incident_id, f"[{severity.upper()}] Alert on {service_name}",
                         severity, service_name, response.user_name, event="new"
                     )
+                    NOTIFICATIONS_SENT.labels(channel="email").inc()
                     asyncio.create_task(send_notification_email(response.email, subject, html))
     except Exception as e:
         logger.warning(f"On-call notification failed for {incident_id}: {e}")
@@ -531,6 +537,7 @@ async def acknowledge_incident(incident_id: str, req: AcknowledgeRequest, reques
         mtta = inc.mtta_seconds
         MTTA_HISTOGRAM.observe(mtta)
         INCIDENTS_ACKNOWLEDGED.inc()
+        INCIDENTS_TOTAL.labels(status="acknowledged").inc()
 
         await publish_event("incidents:ack", {
             "incident_id": incident_id,
@@ -539,6 +546,7 @@ async def acknowledge_incident(incident_id: str, req: AcknowledgeRequest, reques
         })
 
         # Webhook notification (Bonus 2)
+        NOTIFICATIONS_SENT.labels(channel="webhook").inc()
         asyncio.create_task(dispatch_webhook("incident.acknowledged", {
             "incident_id": incident_id,
             "user_id": req.user_id,
@@ -576,6 +584,7 @@ async def resolve_incident(incident_id: str, req: ResolveRequest, request: Reque
         mttr = inc.mttr_seconds
         MTTR_HISTOGRAM.observe(mttr)
         INCIDENTS_RESOLVED.inc()
+        INCIDENTS_TOTAL.labels(status="resolved").inc()
         OPEN_INCIDENTS.dec()
 
         # Clear cache
@@ -588,6 +597,7 @@ async def resolve_incident(incident_id: str, req: ResolveRequest, request: Reque
         })
 
         # Webhook notification (Bonus 2)
+        NOTIFICATIONS_SENT.labels(channel="webhook").inc()
         asyncio.create_task(dispatch_webhook("incident.resolved", {
             "incident_id": incident_id,
             "user_id": req.user_id,
@@ -699,7 +709,9 @@ async def _escalation_monitor():
                                 inc.escalation_level = resp.new_level
                                 inc.assigned_to = resp.next_user_name
                                 await session.commit()
+                                INCIDENTS_TOTAL.labels(status="escalated").inc()
                                 # Dispatch escalation webhook + email (Bonus 1 & 2)
+                                NOTIFICATIONS_SENT.labels(channel="webhook").inc()
                                 asyncio.create_task(dispatch_webhook("incident.escalated", {
                                     "incident_id": inc.id,
                                     "service_name": inc.service_name,
